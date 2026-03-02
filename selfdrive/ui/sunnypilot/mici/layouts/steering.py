@@ -4,7 +4,7 @@ Copyright (c) 2021-, Haibin Wen, sunnypilot, and a number of other contributors.
 This file is part of sunnypilot and is licensed under the MIT License.
 See the LICENSE.md file in the root directory for more details.
 """
-from collections.abc import Callable
+
 
 from cereal import car
 from openpilot.selfdrive.ui.mici.widgets.button import (
@@ -95,9 +95,8 @@ def _build_custom_tune_items():
 # Main Steering Layout
 # ===========================================================================
 class SteeringLayoutMici(NavScroller):
-  def __init__(self, back_callback: Callable):
+  def __init__(self):
     super().__init__()
-    self.set_back_callback(back_callback)
 
     # --- Main view items ---
     self._mads_settings_btn = BigButton("mads")

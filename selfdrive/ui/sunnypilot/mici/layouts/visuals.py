@@ -4,7 +4,7 @@ Copyright (c) 2021-, Haibin Wen, sunnypilot, and a number of other contributors.
 This file is part of sunnypilot and is licensed under the MIT License.
 See the LICENSE.md file in the root directory for more details.
 """
-from collections.abc import Callable
+
 
 from openpilot.selfdrive.ui.mici.widgets.button import BigParamControl, BigMultiParamToggle
 from openpilot.selfdrive.ui.ui_state import ui_state
@@ -28,9 +28,8 @@ TOGGLE_PARAMS = [
 
 
 class VisualsLayoutMici(NavScroller):
-  def __init__(self, back_callback: Callable):
+  def __init__(self):
     super().__init__()
-    self.set_back_callback(back_callback)
 
     self._toggles: dict[str, BigParamControl] = {}
     items: list[Widget] = []

@@ -7,7 +7,7 @@ See the LICENSE.md file in the root directory for more details.
 import requests
 import threading
 import time
-from collections.abc import Callable
+
 
 from openpilot.common.api import api_get
 from openpilot.common.constants import CV
@@ -25,9 +25,8 @@ UPDATE_INTERVAL = 30
 class TripsLayoutMici(NavScroller):
   PARAM_KEY = "ApiCache_DriveStats"
 
-  def __init__(self, back_callback: Callable):
+  def __init__(self):
     super().__init__()
-    self.set_back_callback(back_callback)
 
     self._params = Params()
     self._session = requests.Session()

@@ -22,31 +22,31 @@ class SettingsLayoutSP(OP.SettingsLayout):
   def __init__(self):
     OP.SettingsLayout.__init__(self)
 
-    sunnylink_panel = SunnylinkLayoutMici(back_callback=gui_app.pop_widget)
+    sunnylink_panel = SunnylinkLayoutMici()
     sunnylink_btn = SettingsBigButton("sunnylink", "", "icons_mici/settings/developer/ssh.png")
     sunnylink_btn.set_click_callback(lambda: gui_app.push_widget(sunnylink_panel))
 
-    models_panel = ModelsLayoutMici(back_callback=gui_app.pop_widget)
+    models_panel = ModelsLayoutMici()
     models_btn = SettingsBigButton("models", "", "../../sunnypilot/selfdrive/assets/offroad/icon_models.png")
     models_btn.set_click_callback(lambda: gui_app.push_widget(models_panel))
 
-    cruise_panel = CruiseLayoutMici(back_callback=gui_app.pop_widget)
+    cruise_panel = CruiseLayoutMici()
     cruise_btn = SettingsBigButton("cruise", "", "../../sunnypilot/selfdrive/assets/offroad/icon_vehicle.png")
     cruise_btn.set_click_callback(lambda: gui_app.push_widget(cruise_panel))
 
-    steering_panel = SteeringLayoutMici(back_callback=gui_app.pop_widget)
+    steering_panel = SteeringLayoutMici()
     steering_btn = SettingsBigButton("steering", "", "../../sunnypilot/selfdrive/assets/offroad/icon_lateral.png")
     steering_btn.set_click_callback(lambda: gui_app.push_widget(steering_panel))
 
-    display_panel = DisplayLayoutMici(back_callback=gui_app.pop_widget)
+    display_panel = DisplayLayoutMici()
     display_btn = SettingsBigButton("display", "", "../../sunnypilot/selfdrive/assets/offroad/icon_display.png")
     display_btn.set_click_callback(lambda: gui_app.push_widget(display_panel))
 
-    visuals_panel = VisualsLayoutMici(back_callback=gui_app.pop_widget)
+    visuals_panel = VisualsLayoutMici()
     visuals_btn = SettingsBigButton("visuals", "", "../../sunnypilot/selfdrive/assets/offroad/icon_visuals.png")
     visuals_btn.set_click_callback(lambda: gui_app.push_widget(visuals_panel))
 
-    trips_panel = TripsLayoutMici(back_callback=gui_app.pop_widget)
+    trips_panel = TripsLayoutMici()
     trips_btn = SettingsBigButton("trips", "", "../../sunnypilot/selfdrive/assets/offroad/icon_trips.png")
     trips_btn.set_click_callback(lambda: gui_app.push_widget(trips_panel))
 

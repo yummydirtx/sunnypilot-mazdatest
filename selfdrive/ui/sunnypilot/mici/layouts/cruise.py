@@ -5,7 +5,7 @@ This file is part of sunnypilot and is licensed under the MIT License.
 See the LICENSE.md file in the root directory for more details.
 """
 
-from collections.abc import Callable
+
 
 from openpilot.selfdrive.ui.mici.widgets.button import (
   BigButton,
@@ -81,8 +81,11 @@ def _build_speed_limit_items():
 # ---------------------------------------------------------------------------
 def _build_custom_acc_items():
   toggle = BigParamControl("enable custom\nincrements", "CustomAccIncrementsEnabled")
-  _speed_unit = lambda: "km/h" if ui_state.is_metric else "mph"
-  _speed_label = lambda v: f"{v} {_speed_unit()}"
+  def _speed_unit():
+    return "km/h" if ui_state.is_metric else "mph"
+
+  def _speed_label(v):
+    return f"{v} {_speed_unit()}"
   short_press = BigParamOption(
     "short press",
     "CustomAccShortPressIncrement",
@@ -107,9 +110,8 @@ def _build_custom_acc_items():
 # Main Cruise Layout
 # ===========================================================================
 class CruiseLayoutMici(NavScroller):
-  def __init__(self, back_callback: Callable):
+  def __init__(self):
     super().__init__()
-    self.set_back_callback(back_callback)
 
     # --- Main view items ---
     self._icbm_toggle = BigParamControl("intelligent\ncruise button\nmanagement", "IntelligentCruiseButtonManagement",

@@ -426,6 +426,15 @@ class Scroller(Widget):
     # pass down enabled to child widget for nav stack
     self._scroller.set_enabled(lambda: self.enabled)
 
+  def add_widget(self, item: Widget) -> None:
+    self._scroller.add_widget(item)
+
+  def add_widgets(self, items: list[Widget]) -> None:
+    self._scroller.add_widgets(items)
+
+  def set_reset_scroll_at_show(self, scroll: bool) -> None:
+    self._scroller.set_reset_scroll_at_show(scroll)
+
   def show_event(self):
     super().show_event()
     self._scroller.show_event()

@@ -171,7 +171,7 @@ def capture_picker(option, filename):
 def capture_display():
   from openpilot.selfdrive.ui.sunnypilot.mici.layouts.display import DisplayLayoutMici
 
-  d = DisplayLayoutMici(back_callback=lambda: None)
+  d = DisplayLayoutMici()
   d.show_event()
   capture(d, "display.png")
 
@@ -183,7 +183,7 @@ def capture_display():
 def capture_visuals():
   from openpilot.selfdrive.ui.sunnypilot.mici.layouts.visuals import VisualsLayoutMici
 
-  v = VisualsLayoutMici(back_callback=lambda: None)
+  v = VisualsLayoutMici()
   v.show_event()
   capture(v, "visuals.png")
 
@@ -191,7 +191,7 @@ def capture_visuals():
 def capture_cruise():
   from openpilot.selfdrive.ui.sunnypilot.mici.layouts.cruise import CruiseLayoutMici
 
-  c = CruiseLayoutMici(back_callback=lambda: None)
+  c = CruiseLayoutMici()
   c.show_event()
   capture(c, "cruise.png")
 
@@ -208,7 +208,7 @@ def capture_cruise():
 def capture_steering():
   from openpilot.selfdrive.ui.sunnypilot.mici.layouts.steering import SteeringLayoutMici
 
-  s = SteeringLayoutMici(back_callback=lambda: None)
+  s = SteeringLayoutMici()
   s.show_event()
   capture(s, "steering.png")
 
@@ -238,7 +238,7 @@ def capture_steering():
 def capture_trips():
   from openpilot.selfdrive.ui.sunnypilot.mici.layouts.trips import TripsLayoutMici
 
-  t = TripsLayoutMici(back_callback=lambda: None)
+  t = TripsLayoutMici()
   t.show_event()
   capture(t, "trips.png")
 

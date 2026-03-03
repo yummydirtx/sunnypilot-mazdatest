@@ -88,7 +88,7 @@ class PickerItem(Widget):
       # Multi-line: main line at full size, subtitle smaller and dimmer
       lines = self.display_label.split('\n', 1)
 
-      # Shrink main line to fit item width (same as single-line path)
+      # Shrink to fit: text labels like "default" (ui timeout) overflow at size 56
       main_size = measure_text_cached(font, lines[0], font_size)
       if main_size.x > max_width and main_size.x > 0:
         font_size = max(int(font_size * max_width / main_size.x), 14)
@@ -108,7 +108,7 @@ class PickerItem(Widget):
       sub_x = self._rect.x + (self._rect.width - sub_size.x) / 2
       rl.draw_text_ex(sub_font, lines[1], rl.Vector2(sub_x, main_y + main_size.y + gap), sub_font_size, 0, sub_color)
     else:
-      # Shrink font if label is too wide for item
+      # Shrink to fit: text labels like "default" (ui timeout) overflow at size 56
       text_size = measure_text_cached(font, self.display_label, font_size)
       if text_size.x > max_width and text_size.x > 0:
         font_size = max(int(font_size * max_width / text_size.x), 14)
@@ -194,6 +194,7 @@ class NumberPickerScreen(Widget):
   def _read_value(self) -> int:
     val = self._params.get(self._param, return_default=True)
     try:
+      # float() needed: float_param options store values as float in params
       return int(float(val)) if val is not None else self._min_value
     except (ValueError, TypeError):
       return self._min_value
@@ -255,6 +256,7 @@ class NumberPickerScreen(Widget):
     # Unit label — resolve dynamically if callable, hide for non-numeric labels
     center = self._picker_items[self._center_index()] if self._picker_items else None
     unit_text = self._unit() if not isinstance(self._unit, str) else self._unit
+    # Hide unit for non-numeric labels (e.g. "auto" in brightness, "default" in timeout)
     if unit_text and center is not None:
       try:
         float(center.display_label.replace('\n', ''))

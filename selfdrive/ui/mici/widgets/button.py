@@ -1,14 +1,16 @@
 import math
-import pyray as rl
-from typing import Union
-from enum import Enum
 from collections.abc import Callable
+from enum import Enum
+from typing import Union
+
+import pyray as rl
+
+from openpilot.common.filter_simple import BounceFilter
+from openpilot.system.ui.lib.application import FontWeight, MousePos, gui_app
+from openpilot.system.ui.lib.text_measure import measure_text_cached
 from openpilot.system.ui.widgets import Widget
 from openpilot.system.ui.widgets.label import UnifiedLabel
 from openpilot.system.ui.widgets.scroller import DO_ZOOM
-from openpilot.system.ui.lib.application import gui_app, FontWeight, MousePos
-from openpilot.system.ui.lib.text_measure import measure_text_cached
-from openpilot.common.filter_simple import BounceFilter
 
 try:
   from openpilot.common.params import Params
@@ -16,12 +18,12 @@ except ImportError:
   Params = None
 
 SCROLLING_SPEED_PX_S = 50
-COMPLICATION_SIZE    = 36
-LABEL_COLOR          = rl.Color(255, 255, 255, int(255 * 0.9))
-COMPLICATION_GREY    = rl.Color(0xAA, 0xAA, 0xAA, 255)
-BADGE_GREEN_BG       = rl.Color(51, 171, 76, 50)          # green chip background
-BADGE_GREEN_FG       = rl.Color(175, 235, 185, 200)       # green-tinted text
-CARD_ACTIVE_TINT     = rl.Color(140, 230, 150, 255)       # visible green tint for card bg
+COMPLICATION_SIZE = 36
+LABEL_COLOR = rl.Color(255, 255, 255, int(255 * 0.9))
+COMPLICATION_GREY = rl.Color(0xAA, 0xAA, 0xAA, 255)
+BADGE_GREEN_BG = rl.Color(51, 171, 76, 50)  # green chip background
+BADGE_GREEN_FG = rl.Color(175, 235, 185, 200)  # green-tinted text
+CARD_ACTIVE_TINT = rl.Color(140, 230, 150, 255)  # visible green tint for card bg
 PRESSED_SCALE = 1.15 if DO_ZOOM else 1.07
 
 
@@ -55,8 +57,16 @@ class BigCircleButton(Widget):
   def _draw_content(self, btn_y: float):
     # draw icon
     icon_color = rl.Color(255, 255, 255, int(255 * 0.9)) if self.enabled else rl.Color(255, 255, 255, int(255 * 0.35))
-    rl.draw_texture_ex(self._txt_icon, (self._rect.x + (self._rect.width - self._txt_icon.width) / 2 + self._icon_offset[0],
-                                        btn_y + (self._rect.height - self._txt_icon.height) / 2 + self._icon_offset[1]), 0, 1.0, icon_color)
+    rl.draw_texture_ex(
+      self._txt_icon,
+      (
+        self._rect.x + (self._rect.width - self._txt_icon.width) / 2 + self._icon_offset[0],
+        btn_y + (self._rect.height - self._txt_icon.height) / 2 + self._icon_offset[1],
+      ),
+      0,
+      1.0,
+      icon_color,
+    )
 
   def _render(self, _):
     # draw background
@@ -100,9 +110,13 @@ class BigCircleToggle(BigCircleButton):
     super()._draw_content(btn_y)
 
     # draw status icon
-    rl.draw_texture_ex(self._txt_toggle_enabled if self._checked else self._txt_toggle_disabled,
-                       (self._rect.x + (self._rect.width - self._txt_toggle_enabled.width) / 2, btn_y + 5),
-                       0, 1.0, rl.WHITE)
+    rl.draw_texture_ex(
+      self._txt_toggle_enabled if self._checked else self._txt_toggle_disabled,
+      (self._rect.x + (self._rect.width - self._txt_toggle_enabled.width) / 2, btn_y + 5),
+      0,
+      1.0,
+      rl.WHITE,
+    )
 
 
 class BigButton(Widget):
@@ -111,8 +125,7 @@ class BigButton(Widget):
 
   """A lightweight stand-in for the Qt BigButton, drawn & updated each frame."""
 
-  def __init__(self, text: str, value: str = "", icon: Union[str, rl.Texture] = "", icon_size: tuple[int, int] = (64, 64),
-               scroll: bool = False):
+  def __init__(self, text: str, value: str = "", icon: Union[str, rl.Texture] = "", icon_size: tuple[int, int] = (64, 64), scroll: bool = False):
     super().__init__()
     self.set_rect(rl.Rectangle(0, 0, 402, 180))
     self.text = text
@@ -128,11 +141,22 @@ class BigButton(Widget):
     self._rotate_icon_t: float | None = None
     self._badge_labels: list[str] | None = None
 
-    self._label = UnifiedLabel(text, font_size=self._get_label_font_size(), font_weight=FontWeight.BOLD,
-                               text_color=LABEL_COLOR, alignment_vertical=rl.GuiTextAlignmentVertical.TEXT_ALIGN_BOTTOM, scroll=scroll,
-                               line_height=0.9)
-    self._sub_label = UnifiedLabel(value, font_size=COMPLICATION_SIZE, font_weight=FontWeight.ROMAN,
-                                   text_color=COMPLICATION_GREY, alignment_vertical=rl.GuiTextAlignmentVertical.TEXT_ALIGN_BOTTOM)
+    self._label = UnifiedLabel(
+      text,
+      font_size=self._get_label_font_size(),
+      font_weight=FontWeight.BOLD,
+      text_color=LABEL_COLOR,
+      alignment_vertical=rl.GuiTextAlignmentVertical.TEXT_ALIGN_BOTTOM,
+      scroll=scroll,
+      line_height=0.9,
+    )
+    self._sub_label = UnifiedLabel(
+      value,
+      font_size=COMPLICATION_SIZE,
+      font_weight=FontWeight.ROMAN,
+      text_color=COMPLICATION_GREY,
+      alignment_vertical=rl.GuiTextAlignmentVertical.TEXT_ALIGN_BOTTOM,
+    )
     self._update_label_layout()
 
     self._load_images()
@@ -176,6 +200,7 @@ class BigButton(Widget):
     self._sub_label.set_font_size(size)
 
   def set_value(self, value: str):
+    # Also update if badges were set — need to clear pill mode even if text matches
     if value == self.value and self._badge_labels is None:
       return
     self.value = value
@@ -281,12 +306,12 @@ class BigButton(Widget):
     cy = rect.y + rect.height - badge_h
     for row in reversed(rows):
       total_badge_w = sum(bw for _, bw, _ in row)
+      # Justify: spread badges across full row width when there are 2+ pills
       row_gap = gap if len(row) <= 1 else (avail_w - total_badge_w) / (len(row) - 1)
       cx = rect.x
       for label, badge_w, text_w in row:
         rl.draw_rectangle_rounded(rl.Rectangle(cx, cy, badge_w, badge_h), 0.5, 6, BADGE_GREEN_BG)
-        rl.draw_text_ex(font, label, rl.Vector2(cx + (badge_w - text_w) / 2, cy + v_pad),
-                        font_size, 0, BADGE_GREEN_FG)
+        rl.draw_text_ex(font, label, rl.Vector2(cx + (badge_w - text_w) / 2, cy + v_pad), font_size, 0, BADGE_GREEN_FG)
         cx += badge_w + row_gap
       cy -= badge_h + gap
 
@@ -296,8 +321,7 @@ class BigButton(Widget):
 
     label_color = LABEL_COLOR if self.enabled else rl.Color(255, 255, 255, int(255 * 0.35))
     self._label.set_color(label_color)
-    label_rect = rl.Rectangle(label_x, btn_y + self.LABEL_VERTICAL_PADDING, self._width_hint(),
-                              self._rect.height - self.LABEL_VERTICAL_PADDING * 2)
+    label_rect = rl.Rectangle(label_x, btn_y + self.LABEL_VERTICAL_PADDING, self._width_hint(), self._rect.height - self.LABEL_VERTICAL_PADDING * 2)
     self._label.render(label_rect)
 
     if self.value or self._badge_labels:
@@ -328,10 +352,10 @@ class BigButton(Widget):
     bg_tint = CARD_ACTIVE_TINT if self._badge_labels else rl.WHITE
 
     if self._scroll:
-      # draw black background since images are transparent
+      # Scroll mode: draw content UNDER the card texture so the semi-transparent
+      # edges of the card act as a soft clip mask for overflowing scroll text.
       scaled_rect = rl.Rectangle(btn_x, btn_y, self._rect.width * scale, self._rect.height * scale)
       rl.draw_rectangle_rounded(scaled_rect, 0.4, 7, rl.Color(0, 0, 0, int(255 * 0.5)))
-
       self._draw_content(btn_y)
       rl.draw_texture_ex(txt_bg, (btn_x, btn_y), 0, scale, bg_tint)
     else:
@@ -379,8 +403,7 @@ class BigToggle(BigButton):
 
 
 class BigMultiToggle(BigToggle):
-  def __init__(self, text: str, options: list[str], toggle_callback: Callable | None = None,
-               select_callback: Callable | None = None):
+  def __init__(self, text: str, options: list[str], toggle_callback: Callable | None = None, select_callback: Callable | None = None):
     super().__init__(text, "", toggle_callback=toggle_callback)
     assert len(options) > 0
     self._options = options
@@ -416,8 +439,7 @@ class BigMultiToggle(BigToggle):
 
 
 class BigMultiParamToggle(BigMultiToggle):
-  def __init__(self, text: str, param: str, options: list[str], toggle_callback: Callable | None = None,
-               select_callback: Callable | None = None):
+  def __init__(self, text: str, param: str, options: list[str], toggle_callback: Callable | None = None, select_callback: Callable | None = None):
     super().__init__(text, options, toggle_callback, select_callback)
     self._param = param
 
@@ -470,8 +492,9 @@ class BigParamControl(_ParamControlMixin, BigToggle):
 
 
 class BigCircleParamControl(_ParamControlMixin, BigCircleToggle):
-  def __init__(self, icon: str, param: str, toggle_callback: Callable | None = None, icon_size: tuple[int, int] = (64, 53),
-               icon_offset: tuple[int, int] = (0, 0)):
+  def __init__(
+    self, icon: str, param: str, toggle_callback: Callable | None = None, icon_size: tuple[int, int] = (64, 53), icon_offset: tuple[int, int] = (0, 0)
+  ):
     BigCircleToggle.__init__(self, icon, toggle_callback, icon_size=icon_size, icon_offset=icon_offset)
     self._init_param(param)
 
@@ -483,12 +506,20 @@ class BigCircleParamControl(_ParamControlMixin, BigCircleToggle):
 class BigParamOption(BigButton):
   """A BigButton that shows a numeric param value; opens a picker screen on tap."""
 
-  def __init__(self, text: str, param: str, min_value: int, max_value: int,
-               value_change_step: int = 1, label_callback: Callable | None = None,
-               value_map: dict[int, int] | None = None, float_param: bool = False,
-               picker_label_callback: Callable | None = None,
-               picker_unit: str | Callable[[], str] = "",
-               picker_item_width: int = 0):
+  def __init__(
+    self,
+    text: str,
+    param: str,
+    min_value: int,
+    max_value: int,
+    value_change_step: int = 1,
+    label_callback: Callable | None = None,
+    value_map: dict[int, int] | None = None,
+    float_param: bool = False,
+    picker_label_callback: Callable | None = None,
+    picker_unit: str | Callable[[], str] = "",
+    picker_item_width: int = 0,
+  ):
     super().__init__(text, "")
     self._param = param
     self._min_value = min_value
@@ -508,6 +539,7 @@ class BigParamOption(BigButton):
   def _read_value(self) -> int:
     val = self._params.get(self._param, return_default=True)
     try:
+      # float() needed: float_param options store values as float in params
       return int(float(val)) if val is not None else self._min_value
     except (ValueError, TypeError):
       return self._min_value
@@ -536,6 +568,7 @@ class BigParamOption(BigButton):
 
   def _open_picker(self):
     from openpilot.system.ui.widgets.scroller import NavScroller
+
     picker = self.create_picker_screen()
     view = NavScroller(scroll_indicator=False, pad=0)
     view.set_back_callback(lambda: self.refresh())
@@ -546,6 +579,7 @@ class BigParamOption(BigButton):
   def create_picker_screen(self):
     """Factory: create a NumberPickerScreen from this option's config."""
     from openpilot.selfdrive.ui.mici.widgets.number_picker import NumberPickerScreen
+
     kwargs = {}
     if self._picker_item_width:
       kwargs['item_width'] = self._picker_item_width

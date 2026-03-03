@@ -254,7 +254,7 @@ class NumberPickerScreen(Widget):
 
     # Unit label — resolve dynamically if callable, hide for non-numeric labels
     center = self._picker_items[self._center_index()] if self._picker_items else None
-    unit_text = self._unit() if callable(self._unit) else self._unit
+    unit_text = self._unit() if not isinstance(self._unit, str) else self._unit
     if unit_text and center is not None:
       try:
         float(center.display_label.replace('\n', ''))

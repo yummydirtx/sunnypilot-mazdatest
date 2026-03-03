@@ -246,6 +246,7 @@ class BigButton(Widget):
     gap = 10
 
     # Measure each badge
+    assert self._badge_labels is not None
     specs = []
     for label in self._badge_labels:
       text_w = measure_text_cached(font, label, font_size).x

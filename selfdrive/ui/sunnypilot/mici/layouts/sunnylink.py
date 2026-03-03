@@ -25,6 +25,7 @@ class SunnylinkLayoutMici(NavScroller):
     self._restore_in_progress = False
     self._backup_in_progress = False
     self._sunnylink_enabled = ui_state.params.get("SunnylinkEnabled")
+    self._prev_sunnylink_enabled = None
 
     self._sunnylink_toggle = BigToggle(text=tr("enable sunnylink"),
                                        initial_state=self._sunnylink_enabled,
@@ -50,12 +51,14 @@ class SunnylinkLayoutMici(NavScroller):
   def _update_state(self):
     super()._update_state()
     self._sunnylink_enabled = ui_state.params.get("SunnylinkEnabled")
-    self._sunnylink_toggle.set_checked(self._sunnylink_enabled)
-    self._sunnylink_pair_button.set_visible(self._sunnylink_enabled)
-    self._sunnylink_sponsor_button.set_visible(self._sunnylink_enabled)
-    self._backup_btn.set_visible(self._sunnylink_enabled)
-    self._restore_btn.set_visible(self._sunnylink_enabled)
-    self._sunnylink_uploader_toggle.set_visible(self._sunnylink_enabled)
+    if self._sunnylink_enabled != self._prev_sunnylink_enabled:
+      self._sunnylink_toggle.set_checked(self._sunnylink_enabled)
+      self._sunnylink_pair_button.set_visible(self._sunnylink_enabled)
+      self._sunnylink_sponsor_button.set_visible(self._sunnylink_enabled)
+      self._backup_btn.set_visible(self._sunnylink_enabled)
+      self._restore_btn.set_visible(self._sunnylink_enabled)
+      self._sunnylink_uploader_toggle.set_visible(self._sunnylink_enabled)
+      self._prev_sunnylink_enabled = self._sunnylink_enabled
     self.handle_backup_restore_progress()
 
     if ui_state.sunnylink_state.is_sponsor():

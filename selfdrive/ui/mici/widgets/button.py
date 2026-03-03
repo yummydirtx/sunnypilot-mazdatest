@@ -156,10 +156,7 @@ class BigButton(Widget):
     return int(self._rect.width - self.LABEL_HORIZONTAL_PADDING * 2 - icon_size)
 
   def _get_label_font_size(self):
-    if len(self.text) <= 18:
-      return 48
-    else:
-      return 42
+    return 42
 
   def _update_label_layout(self):
     self._label.set_font_size(self._get_label_font_size())
@@ -169,6 +166,8 @@ class BigButton(Widget):
       self._label.set_alignment_vertical(rl.GuiTextAlignmentVertical.TEXT_ALIGN_BOTTOM)
 
   def set_text(self, text: str):
+    if text == self.text:
+      return
     self.text = text
     self._label.set_text(text)
     self._update_label_layout()
@@ -177,6 +176,8 @@ class BigButton(Widget):
     self._sub_label.set_font_size(size)
 
   def set_value(self, value: str):
+    if value == self.value and self._badge_labels is None:
+      return
     self.value = value
     self._badge_labels = None
     self._sub_label.set_text(value)
@@ -193,8 +194,11 @@ class BigButton(Widget):
     for key, val in entries:
       if val == 'off':
         continue
-      labels.append(key if val == 'on' else f"{key} • {val}")
-    self._badge_labels = labels or None
+      labels.append(key if val == 'on' else f"{key}•{val}")
+    new_labels = labels or None
+    if new_labels == self._badge_labels:
+      return
+    self._badge_labels = new_labels
     self.value = ""
     self._update_label_layout()
 
@@ -236,8 +240,8 @@ class BigButton(Widget):
 
   def _draw_badges(self, rect: rl.Rectangle):
     """Render cached badge labels as pill chips in a flow layout."""
-    font = gui_app.font(FontWeight.MEDIUM)
-    font_size = 20
+    font = gui_app.font(FontWeight.MONO)
+    font_size = 24
     h_pad = 12
     gap = 4
 
@@ -424,43 +428,52 @@ class BigMultiParamToggle(BigMultiToggle):
     new_idx = self._options.index(self.value)
     self._params.put_nonblocking(self._param, new_idx)
 
+  def refresh(self):
+    new_value = self._options[self._params.get(self._param) or 0]
+    if new_value != self.value:
+      self.set_value(new_value)
 
-class BigParamControl(BigToggle):
+
+class _ParamControlMixin:
+  """Shared param management for BigParamControl and BigCircleParamControl."""
+
+  def _init_param(self, param: str):
+    self._param_key = param
+    self._params = Params()
+    self.set_checked(self._params.get_bool(self._param_key, False))
+
+  def _write_param(self):
+    self._params.put_bool(self._param_key, self._checked)
+
+  def refresh(self):
+    new_state = self._params.get_bool(self._param_key, False)
+    if new_state != self._checked:
+      self.set_checked(new_state)
+
+
+class BigParamControl(_ParamControlMixin, BigToggle):
   def __init__(self, text: str, param: str, toggle_callback: Callable | None = None):
-    super().__init__(text, "", toggle_callback=toggle_callback)
-    self.param = param
-    self.params = Params()
-    self.set_checked(self.params.get_bool(self.param, False))
+    BigToggle.__init__(self, text, "", toggle_callback=toggle_callback)
+    self._init_param(param)
 
   def _handle_mouse_release(self, mouse_pos: MousePos):
     # Write param before BigToggle fires toggle_callback so the callback sees the new value
     Widget._handle_mouse_release(self, mouse_pos)
     self._checked = not self._checked
-    self.params.put_bool(self.param, self._checked)
+    self._write_param()
     if self._toggle_callback:
       self._toggle_callback(self._checked)
 
-  def refresh(self):
-    new_state = self.params.get_bool(self.param, False)
-    if new_state != self._checked:
-      self.set_checked(new_state)
 
-
-# TODO: param control base class
-class BigCircleParamControl(BigCircleToggle):
+class BigCircleParamControl(_ParamControlMixin, BigCircleToggle):
   def __init__(self, icon: str, param: str, toggle_callback: Callable | None = None, icon_size: tuple[int, int] = (64, 53),
                icon_offset: tuple[int, int] = (0, 0)):
-    super().__init__(icon, toggle_callback, icon_size=icon_size, icon_offset=icon_offset)
-    self._param = param
-    self.params = Params()
-    self.set_checked(self.params.get_bool(self._param, False))
+    BigCircleToggle.__init__(self, icon, toggle_callback, icon_size=icon_size, icon_offset=icon_offset)
+    self._init_param(param)
 
   def _handle_mouse_release(self, mouse_pos: MousePos):
     super()._handle_mouse_release(mouse_pos)
-    self.params.put_bool(self._param, self._checked)
-
-  def refresh(self):
-    self.set_checked(self.params.get_bool(self._param, False))
+    self._write_param()
 
 
 class BigParamOption(BigButton):
@@ -509,8 +522,10 @@ class BigParamOption(BigButton):
       self.set_value(str(display_val))
 
   def refresh(self):
-    self._current = self._read_value()
-    self._update_display()
+    new = self._read_value()
+    if new != self._current:
+      self._current = new
+      self._update_display()
 
   def _open_picker(self):
     from openpilot.system.ui.widgets.scroller import NavScroller

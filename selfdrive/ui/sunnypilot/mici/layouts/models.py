@@ -109,4 +109,3 @@ class ModelsLayoutMici(NavScroller):
       self.current_model_btn.set_value(manager.activeBundle.internalName.lower() if manager.activeBundle else tr("default model"))
       self.cancel_download_btn.set_visible(False)
     self.current_model_btn.set_enabled(ui_state.is_offroad())
-    self.current_model_btn.set_text(tr("current model"))

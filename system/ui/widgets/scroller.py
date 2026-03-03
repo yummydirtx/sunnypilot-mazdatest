@@ -94,6 +94,7 @@ class _Scroller(Widget):
 
     # when not pressed, snap to closest item to be center
     self._scroll_snap_filter = FirstOrderFilter(0.0, 0.05, 1 / gui_app.target_fps)
+    self._snap_ready = False  # skip snap on first layout after show (items have stale positions)
 
     self.scroll_panel = GuiScrollPanel2(self._horizontal, handle_out_of_bounds=not self._snap_items)
     self._scroll_enabled: bool | Callable[[], bool] = True
@@ -207,7 +208,11 @@ class _Scroller(Widget):
 
     if scroll_snap_idx is not None:
       snap_item = visible_items[scroll_snap_idx]
-      if self.is_pressed:
+      if not self._snap_ready:
+        # first layout after show — item positions are stale; skip snap correction
+        self._snap_ready = True
+        self._scroll_snap_filter.x = 0
+      elif self.is_pressed:
         # no snapping until released
         self._scroll_snap_filter.x = 0
       else:
@@ -411,6 +416,11 @@ class _Scroller(Widget):
     self._pending_move.clear()
     self._scrolling_to = None, False
     self._scrolling_to_filter.x = 0.0
+    self._scroll_snap_filter.x = 0.0
+    self._snap_ready = False
+    self.scroll_panel._state = ScrollState.STEADY
+    self.scroll_panel._velocity = 0.0
+    self.scroll_panel._velocity_buffer.clear()
 
   def hide_event(self):
     super().hide_event()

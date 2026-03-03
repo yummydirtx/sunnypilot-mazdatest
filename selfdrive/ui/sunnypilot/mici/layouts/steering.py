@@ -37,7 +37,7 @@ def _build_mads_items():
 # ---------------------------------------------------------------------------
 def _build_lane_change_items():
   auto_lc = BigParamControl("auto lane change", "AutoLaneChangeTimer")
-  bsm_delay = BigParamControl("blind spot delay", "AutoLaneChangeBsmDelay")
+  bsm_delay = BigParamControl("bsm delay", "AutoLaneChangeBsmDelay")
   return [auto_lc, bsm_delay], auto_lc, bsm_delay
 
 
@@ -45,7 +45,7 @@ def _build_lane_change_items():
 # Blinker sub-panel items
 # ---------------------------------------------------------------------------
 def _build_blinker_items():
-  toggle = BigParamControl("enable blinker\npause", "BlinkerPauseLateralControl")
+  toggle = BigParamControl("enable blinker pause", "BlinkerPauseLateralControl")
   speed = BigParamOption(
     "blinker speed", "BlinkerMinLateralControlSpeed",
     min_value=0, max_value=255, value_change_step=5,
@@ -65,13 +65,13 @@ def _build_blinker_items():
 # Torque sub-panel items
 # ---------------------------------------------------------------------------
 def _build_self_tune_items():
-  self_tune = BigParamControl("enable\nself-tune", "LiveTorqueParamsToggle")
+  self_tune = BigParamControl("enable self-tune", "LiveTorqueParamsToggle")
   relaxed = BigParamControl("less restrict", "LiveTorqueParamsRelaxedToggle")
   return [self_tune, relaxed], self_tune, relaxed
 
 
 def _build_custom_tune_items():
-  custom_tune = BigParamControl("enable custom\ntuning", "CustomTorqueParams")
+  custom_tune = BigParamControl("enable custom tuning", "CustomTorqueParams")
   manual_rt = BigParamControl("manual realtime", "TorqueParamsOverrideEnabled")
   lat_accel = BigParamOption(
     "lat accel", "TorqueParamsOverrideLatAccelFactor",
@@ -97,6 +97,11 @@ def _build_custom_tune_items():
 class SteeringLayoutMici(NavScroller):
   def __init__(self):
     super().__init__()
+
+    # Transition tracking to avoid per-frame disk writes
+    self._prev_torque_allowed: bool | None = None
+    self._prev_mads_limited: bool | None = None
+    self._prev_self_tune_on: bool | None = None
 
     # --- Main view items ---
     self._mads_settings_btn = BigButton("mads")
@@ -126,7 +131,7 @@ class SteeringLayoutMici(NavScroller):
 
     self._blinker_items, self._blinker_toggle, self._blinker_speed, self._blinker_delay = _build_blinker_items()
 
-    self._torque_toggle = BigParamControl("enable torque\ncontrol", "EnforceTorqueControl")
+    self._torque_toggle = BigParamControl("enable torque control", "EnforceTorqueControl")
 
     # Self-tune subcategory
     self._tq_self_tune_btn = BigButton("self tune")
@@ -163,16 +168,12 @@ class SteeringLayoutMici(NavScroller):
 
     self._nnlc_toggle.refresh()
 
-    torque_allowed = True
-    if ui_state.CP is not None:
-      if ui_state.CP.steerControlType == car.CarParams.SteerControlType.angle:
-        ui_state.params.remove("EnforceTorqueControl")
-        ui_state.params.remove("NeuralNetworkLateralControl")
-        torque_allowed = False
-    else:
+    torque_allowed = (ui_state.CP is not None and
+                      ui_state.CP.steerControlType != car.CarParams.SteerControlType.angle)
+    if not torque_allowed and self._prev_torque_allowed is not False:
       ui_state.params.remove("EnforceTorqueControl")
       ui_state.params.remove("NeuralNetworkLateralControl")
-      torque_allowed = False
+    self._prev_torque_allowed = torque_allowed
 
     mads_on = ui_state.params.get_bool("Mads")
     offroad = ui_state.is_offroad()
@@ -188,7 +189,7 @@ class SteeringLayoutMici(NavScroller):
         ("enabled", "on"),
         ("main cruise", cruise),
         ("unified", unified),
-        (f"{steer_mode} steering on brake", "on"),
+        (steer_mode, "on"),
       ])
 
     blinker_on = ui_state.params.get_bool("BlinkerPauseLateralControl")
@@ -200,8 +201,8 @@ class SteeringLayoutMici(NavScroller):
       delay_val = ui_state.params.get("BlinkerLateralReengageDelay", return_default=True) or 0
       self._blinker_settings_btn.set_badges([
         ("enabled", "on"),
-        (f"pause at {speed_val} {unit}", "on"),
-        (f"{delay_val} second delay", "on"),
+        ("pause", f"{speed_val}{unit}"),
+        ("delay", f"{delay_val}s"),
       ])
 
     lc_auto = "on" if ui_state.params.get_bool("AutoLaneChangeTimer") else "off"
@@ -211,7 +212,7 @@ class SteeringLayoutMici(NavScroller):
     else:
       self._lane_change_btn.set_badges([
         ("auto", lc_auto),
-        ("blind spot delay", lc_bsm),
+        ("bsm delay", lc_bsm),
       ])
 
     enforce_torque = ui_state.params.get_bool("EnforceTorqueControl")
@@ -243,10 +244,15 @@ class SteeringLayoutMici(NavScroller):
     offroad = ui_state.is_offroad()
     self._mads_toggle.set_enabled(offroad)
 
-    if mads_limited_settings(ui_state):
-      ui_state.params.remove("MadsMainCruiseAllowed")
-      ui_state.params.put_bool("MadsUnifiedEngagementMode", True)
-      ui_state.params.put("MadsSteeringMode", MadsSteeringModeOnBrake.DISENGAGE)
+    is_mads_limited = mads_limited_settings(ui_state)
+    if is_mads_limited:
+      if self._prev_mads_limited is not True:
+        ui_state.params.remove("MadsMainCruiseAllowed")
+        ui_state.params.put_bool("MadsUnifiedEngagementMode", True)
+        ui_state.params.put("MadsSteeringMode", MadsSteeringModeOnBrake.DISENGAGE)
+        self._mads_steering.refresh()
+        self._mads_main_cruise.refresh()
+        self._mads_unified.refresh()
       self._mads_main_cruise.set_enabled(False)
       self._mads_unified.set_enabled(False)
       self._mads_steering.set_enabled(False)
@@ -255,6 +261,7 @@ class SteeringLayoutMici(NavScroller):
       self._mads_main_cruise.set_enabled(enabled)
       self._mads_unified.set_enabled(enabled)
       self._mads_steering.set_enabled(enabled)
+    self._prev_mads_limited = is_mads_limited
 
   def _update_lane_change_state(self):
     self._lc_timer.refresh()
@@ -286,8 +293,11 @@ class SteeringLayoutMici(NavScroller):
     self_tune_on = ui_state.params.get_bool("LiveTorqueParamsToggle")
     if not self_tune_on:
       self._tq_self_tune_btn.set_value("off")
-      ui_state.params.remove("LiveTorqueParamsRelaxedToggle")
+      if self._prev_self_tune_on is not False:
+        ui_state.params.remove("LiveTorqueParamsRelaxedToggle")
+      self._prev_self_tune_on = False
     else:
+      self._prev_self_tune_on = True
       relaxed = "on" if ui_state.params.get_bool("LiveTorqueParamsRelaxedToggle") else "off"
       self._tq_self_tune_btn.set_badges([
         ("enabled", "on"),
@@ -305,10 +315,10 @@ class SteeringLayoutMici(NavScroller):
       lat_val = int(float(lat_raw)) / 100
       fric_val = int(float(fric_raw)) / 100
       self._tq_custom_btn.set_badges([
-        ("custom tune", "on"),
-        ("manual realtime", manual_rt),
-        ("lat accel", f"{lat_val} m/s²"),
-        ("friction", str(fric_val)),
+        ("enabled", "on"),
+        ("realtime", manual_rt),
+        ("frc", str(fric_val)),
+        ("lat", f"{lat_val}m/s²"),
       ])
 
     # Self-tune sub-panel state — use lambda so enabled evaluates at render time

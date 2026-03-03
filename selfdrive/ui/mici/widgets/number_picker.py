@@ -200,6 +200,7 @@ class NumberPickerScreen(Widget):
 
   def show_event(self):
     super().show_event()
+    self._scroller.show_event()
     current = self._read_value()
     self._last_center_value = current
     for idx, item in enumerate(self._picker_items):

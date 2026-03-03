@@ -31,6 +31,7 @@ class VisualsLayoutMici(NavScroller):
   def __init__(self):
     super().__init__()
 
+    self._prev_has_long: bool | None = None
     self._toggles: dict[str, BigParamControl] = {}
     items: list[Widget] = []
     for label, param in TOGGLE_PARAMS:
@@ -55,8 +56,12 @@ class VisualsLayoutMici(NavScroller):
     super()._update_state()
     for _param, toggle in self._toggles.items():
       toggle.refresh()
+    self._chevron_info.refresh()
+    self._dev_ui_info.refresh()
 
     has_long = ui_state.has_longitudinal_control
     self._chevron_info.set_enabled(has_long)
-    if not has_long and ui_state.params.get("ChevronInfo", return_default=True):
+    if not has_long and self._prev_has_long is not False:
       ui_state.params.put("ChevronInfo", 0)
+      self._chevron_info.refresh()
+    self._prev_has_long = has_long

@@ -23,7 +23,9 @@ def _brightness_label(val):
     return "auto"
   if val == OnroadBrightness.AUTO_DARK:
     return "auto (dark)"
-  return f"{(val - 1) * 5}%"
+  if val == OnroadBrightness.SCREEN_OFF:
+    return "screen off"
+  return f"{(val - 2) * 5}%"
 
 
 def _brightness_picker_label(val):
@@ -31,13 +33,16 @@ def _brightness_picker_label(val):
     return "auto"
   if val == OnroadBrightness.AUTO_DARK:
     return "auto\n(dark)"
-  return str((val - 1) * 5)
+  if val == OnroadBrightness.SCREEN_OFF:
+    return "0\n(off)"
+  return str((val - 2) * 5)
 
 
 def _timer_label(val):
   if val < 60:
-    return f"{val} seconds"
-  return f"{int(val / 60)} minutes"
+    return f"{val} second{'s' if val != 1 else ''}"
+  mins = int(val / 60)
+  return f"{mins} minute{'s' if mins != 1 else ''}"
 
 
 def _timer_picker_label(val):

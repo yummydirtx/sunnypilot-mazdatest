@@ -57,8 +57,9 @@ class TripsLayoutMici(NavScroller):
     super().show_event()
     if not self._running:
       self._running = True
-      self._update_thread = threading.Thread(target=self._update_loop, daemon=True)
-      self._update_thread.start()
+      if self._update_thread is None or not self._update_thread.is_alive():
+        self._update_thread = threading.Thread(target=self._update_loop, daemon=True)
+        self._update_thread.start()
 
   def hide_event(self):
     super().hide_event()
@@ -108,5 +109,7 @@ class TripsLayoutMici(NavScroller):
 
   def _update_state(self):
     super()._update_state()
-    self._stats = self._get_stats()
-    self._format_stats()
+    new_stats = self._get_stats()
+    if new_stats != self._stats:
+      self._stats = new_stats
+      self._format_stats()

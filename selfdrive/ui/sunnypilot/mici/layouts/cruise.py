@@ -239,7 +239,7 @@ class CruiseLayoutMici(NavScroller):
       self._speed_limit_btn.set_badges(
         [
           (sl_mode, "on"),
-          ("source", sl_source),
+          ("source", sl_source.replace(' ', '-')),
           ("offset", sl_offset),
         ]
       )

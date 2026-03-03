@@ -19,7 +19,7 @@ SCROLLING_SPEED_PX_S = 50
 COMPLICATION_SIZE    = 36
 LABEL_COLOR          = rl.Color(255, 255, 255, int(255 * 0.9))
 COMPLICATION_GREY    = rl.Color(0xAA, 0xAA, 0xAA, 255)
-BADGE_GREEN_BG       = rl.Color(51, 171, 76, 35)          # green chip background
+BADGE_GREEN_BG       = rl.Color(51, 171, 76, 50)          # green chip background
 BADGE_GREEN_FG       = rl.Color(175, 235, 185, 200)       # green-tinted text
 CARD_ACTIVE_TINT     = rl.Color(140, 230, 150, 255)       # visible green tint for card bg
 PRESSED_SCALE = 1.15 if DO_ZOOM else 1.07
@@ -194,7 +194,7 @@ class BigButton(Widget):
     for key, val in entries:
       if val == 'off':
         continue
-      labels.append(key if val == 'on' else f"{key}•{val}")
+      labels.append(key if val == 'on' else f"{key}:{val}")
     new_labels = labels or None
     if new_labels == self._badge_labels:
       return
@@ -241,9 +241,9 @@ class BigButton(Widget):
   def _draw_badges(self, rect: rl.Rectangle):
     """Render cached badge labels as pill chips in a flow layout."""
     font = gui_app.font(FontWeight.MONO)
-    font_size = 24
+    font_size = 28
     h_pad = 12
-    gap = 4
+    gap = 10
 
     # Measure each badge
     specs = []
@@ -272,7 +272,7 @@ class BigButton(Widget):
     num_rows = len(rows)
     text_h = measure_text_cached(font, "Xg", font_size).y  # representative line height
     max_h = (rect.height - gap * (num_rows - 1)) / num_rows
-    badge_h = max(text_h, min(text_h + 10, max_h))
+    badge_h = max(text_h, min(text_h + 4, max_h))
     v_pad = (badge_h - text_h) / 2
 
     # Draw rows bottom-up

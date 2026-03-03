@@ -187,7 +187,7 @@ class SteeringLayoutMici(NavScroller):
       steer_mode = MADS_STEERING_MODE_LABELS[min(steer_idx, len(MADS_STEERING_MODE_LABELS) - 1)]
       self._mads_settings_btn.set_badges([
         ("enabled", "on"),
-        ("main cruise", cruise),
+        ("main-cruise", cruise),
         ("unified", unified),
         (steer_mode, "on"),
       ])
@@ -212,7 +212,7 @@ class SteeringLayoutMici(NavScroller):
     else:
       self._lane_change_btn.set_badges([
         ("auto", lc_auto),
-        ("bsm delay", lc_bsm),
+        ("bsm-delay", lc_bsm),
       ])
 
     enforce_torque = ui_state.params.get_bool("EnforceTorqueControl")
@@ -225,7 +225,7 @@ class SteeringLayoutMici(NavScroller):
       self._torque_settings_btn.set_badges([
         ("enabled", "on"),
         ("self-tune", self_tune),
-        ("custom tuning", custom),
+        ("custom-tuning", custom),
       ])
     self._nnlc_toggle.set_enabled(torque_allowed and offroad and not enforce_torque)
 
@@ -301,7 +301,7 @@ class SteeringLayoutMici(NavScroller):
       relaxed = "on" if ui_state.params.get_bool("LiveTorqueParamsRelaxedToggle") else "off"
       self._tq_self_tune_btn.set_badges([
         ("enabled", "on"),
-        ("less restrict", relaxed),
+        ("less-restrict", relaxed),
       ])
 
     # Custom tuning subcategory button summary
@@ -318,7 +318,7 @@ class SteeringLayoutMici(NavScroller):
         ("enabled", "on"),
         ("realtime", manual_rt),
         ("frc", str(fric_val)),
-        ("lat", f"{lat_val}m/s²"),
+        ("lat", str(lat_val)),
       ])
 
     # Self-tune sub-panel state — use lambda so enabled evaluates at render time

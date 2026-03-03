@@ -26,18 +26,18 @@ ACC_LONG_PRESS_MAP = {1: 1, 2: 5, 3: 10}
 # ---------------------------------------------------------------------------
 # Speed Limit sub-panel items
 # ---------------------------------------------------------------------------
-def _format_offset(offset_type, value):
-  if offset_type == 2:  # percentage
-    return f"{value}%"
-  elif offset_type == 1:  # fixed
-    unit = "km/h" if ui_state.is_metric else "mph"
-    return f"{value}{unit}"
-  return "none"
+def _offset_unit():
+  t = int(ui_state.params.get("SpeedLimitOffsetType", return_default=True))
+  if t == 2:
+    return "%"
+  if t == 1:
+    return "km/h" if ui_state.is_metric else "mph"
+  return ""
 
 
 def _offset_label(value):
-  offset_type = int(ui_state.params.get("SpeedLimitOffsetType", return_default=True))
-  return _format_offset(offset_type, value)
+  unit = _offset_unit()
+  return f"{value}{unit}" if unit else "none"
 
 
 def _build_speed_limit_items():
@@ -56,14 +56,6 @@ def _build_speed_limit_items():
     "SpeedLimitOffsetType",
     ["none", "fixed", "%"],
   )
-
-  def _offset_unit():
-    t = int(ui_state.params.get("SpeedLimitOffsetType", return_default=True))
-    if t == 2:
-      return "%"
-    if t == 1:
-      return "km/h" if ui_state.is_metric else "mph"
-    return ""
 
   offset_value = BigParamOption(
     "offset value",
@@ -233,9 +225,8 @@ class CruiseLayoutMici(NavScroller):
     else:
       sl_source_idx = ui_state.params.get("SpeedLimitPolicy", return_default=True) or 0
       sl_source = SL_SOURCE_LABELS[min(sl_source_idx, len(SL_SOURCE_LABELS) - 1)]
-      sl_offset_type = ui_state.params.get("SpeedLimitOffsetType", return_default=True) or 0
       sl_offset_val = ui_state.params.get("SpeedLimitValueOffset", return_default=True) or 0
-      sl_offset = _format_offset(sl_offset_type, sl_offset_val)
+      sl_offset = _offset_label(sl_offset_val)
       self._speed_limit_btn.set_badges(
         [
           (sl_mode, "on"),

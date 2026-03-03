@@ -199,9 +199,7 @@ class SunnylinkPairBigButton(BigButton):
     dlg: BigDialog | SunnylinkPairingDialog | None = None
     if UNREGISTERED_SUNNYLINK_DONGLE_ID == (ui_state.params.get("SunnylinkDongleId") or UNREGISTERED_SUNNYLINK_DONGLE_ID):
       dlg = BigDialog(tr("sunnylink Dongle ID not found. Please reboot & try again."), "")
-    elif self.sponsor_pairing:
-      dlg = SunnylinkPairingDialog(sponsor_pairing=True)
-    elif not self.sponsor_pairing:
-      dlg = SunnylinkPairingDialog(sponsor_pairing=False)
+    else:
+      dlg = SunnylinkPairingDialog(sponsor_pairing=self.sponsor_pairing)
     if dlg:
       gui_app.push_widget(dlg)

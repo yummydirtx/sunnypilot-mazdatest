@@ -530,6 +530,9 @@ class BigParamOption(BigButton):
     if new != self._current:
       self._current = new
       self._update_display()
+    elif self._label_callback:
+      # Label may depend on external state (e.g. offset type), re-render
+      self._update_display()
 
   def _open_picker(self):
     from openpilot.system.ui.widgets.scroller import NavScroller

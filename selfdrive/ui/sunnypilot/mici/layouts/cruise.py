@@ -19,7 +19,7 @@ from openpilot.system.ui.lib.application import gui_app
 from openpilot.system.ui.widgets.scroller import NavScroller
 
 SL_MODE_LABELS = ["off", "info", "warn", "assist"]
-SL_SOURCE_LABELS = ["car", "map", "car first", "map first", "combined"]
+SL_SOURCE_LABELS = ["car", "map", "car-first", "map-first", "combined"]
 ACC_LONG_PRESS_MAP = {1: 1, 2: 5, 3: 10}
 
 
@@ -239,7 +239,7 @@ class CruiseLayoutMici(NavScroller):
       self._speed_limit_btn.set_badges(
         [
           (sl_mode, "on"),
-          ("source", sl_source.replace(' ', '-')),
+          (sl_source, "on"),
           ("offset", sl_offset),
         ]
       )

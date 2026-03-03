@@ -23,6 +23,10 @@ SL_SOURCE_LABELS = ["car", "map", "car-first", "map-first", "combined"]
 ACC_LONG_PRESS_MAP = {1: 1, 2: 5, 3: 10}
 
 
+def _speed_unit():
+  return "km/h" if ui_state.is_metric else "mph"
+
+
 # ---------------------------------------------------------------------------
 # Speed Limit sub-panel items
 # ---------------------------------------------------------------------------
@@ -31,7 +35,7 @@ def _offset_unit():
   if t == 2:
     return "%"
   if t == 1:
-    return "km/h" if ui_state.is_metric else "mph"
+    return _speed_unit()
   return ""
 
 
@@ -73,8 +77,6 @@ def _build_speed_limit_items():
 # ---------------------------------------------------------------------------
 def _build_custom_acc_items():
   toggle = BigParamControl("enable custom increments", "CustomAccIncrementsEnabled")
-  def _speed_unit():
-    return "km/h" if ui_state.is_metric else "mph"
 
   def _speed_label(v):
     return f"{v} {_speed_unit()}"
@@ -205,7 +207,7 @@ class CruiseLayoutMici(NavScroller):
     if not acc_on:
       self._custom_acc_btn.set_value("off")
     else:
-      unit = "km/h" if ui_state.is_metric else "mph"
+      unit = _speed_unit()
       short_val = ui_state.params.get("CustomAccShortPressIncrement", return_default=True) or 1
       long_raw = ui_state.params.get("CustomAccLongPressIncrement", return_default=True) or 1
       long_val = ACC_LONG_PRESS_MAP.get(long_raw, long_raw)

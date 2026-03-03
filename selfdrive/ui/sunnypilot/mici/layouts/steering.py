@@ -23,6 +23,10 @@ def _bb(val: bool) -> str:
   return "on" if val else "off"
 
 
+def _speed_unit():
+  return "km/h" if ui_state.is_metric else "mph"
+
+
 # ---------------------------------------------------------------------------
 # MADS sub-panel items
 # ---------------------------------------------------------------------------
@@ -53,8 +57,8 @@ def _build_blinker_items():
   speed = BigParamOption(
     "blinker speed", "BlinkerMinLateralControlSpeed",
     min_value=0, max_value=255, value_change_step=5,
-    label_callback=lambda v: f'{v} {"km/h" if ui_state.is_metric else "mph"}',
-    picker_unit=lambda: "km/h" if ui_state.is_metric else "mph",
+    label_callback=lambda v: f"{v} {_speed_unit()}",
+    picker_unit=_speed_unit,
   )
   delay = BigParamOption(
     "blinker delay", "BlinkerLateralReengageDelay",
@@ -201,7 +205,7 @@ class SteeringLayoutMici(NavScroller):
       self._blinker_settings_btn.set_value("off")
     else:
       speed_val = ui_state.params.get("BlinkerMinLateralControlSpeed", return_default=True) or 0
-      unit = "km/h" if ui_state.is_metric else "mph"
+      unit = _speed_unit()
       delay_val = ui_state.params.get("BlinkerLateralReengageDelay", return_default=True) or 0
       self._blinker_settings_btn.set_badges([
         ("enabled", "on"),

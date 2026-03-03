@@ -265,10 +265,10 @@ class BigButton(Widget):
 
   def _draw_badges(self, rect: rl.Rectangle):
     """Render cached badge labels as pill chips in a flow layout."""
-    font = gui_app.font(FontWeight.MONO)
-    font_size = 28
-    h_pad = 12
-    gap = 10
+    font = gui_app.font(FontWeight.BOLD)
+    font_size = 26
+    h_pad = 10
+    gap = 8
 
     # Measure each badge
     assert self._badge_labels is not None

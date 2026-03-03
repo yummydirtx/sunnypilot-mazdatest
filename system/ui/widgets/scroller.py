@@ -460,7 +460,8 @@ class Scroller(Widget):
 class NavScroller(NavWidget, Scroller):
   """Full screen Scroller that properly supports nav stack w/ animations"""
   def __init__(self, **kwargs):
-    super().__init__(**kwargs)
+    super().__init__()  # NavWidget doesn't accept kwargs; Scroller creates a default _scroller via MRO
+    self._scroller = _Scroller([], **kwargs)
     # pass down enabled to child widget for nav stack + disable while swiping away NavWidget
     self._scroller.set_enabled(lambda: self.enabled and not self.is_dismissing)
 

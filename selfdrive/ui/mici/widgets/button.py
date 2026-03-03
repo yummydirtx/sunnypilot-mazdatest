@@ -7,6 +7,7 @@ from openpilot.system.ui.widgets import Widget
 from openpilot.system.ui.widgets.label import UnifiedLabel
 from openpilot.system.ui.widgets.scroller import DO_ZOOM
 from openpilot.system.ui.lib.application import gui_app, FontWeight, MousePos
+from openpilot.system.ui.lib.text_measure import measure_text_cached
 from openpilot.common.filter_simple import BounceFilter
 
 try:
@@ -18,6 +19,9 @@ SCROLLING_SPEED_PX_S = 50
 COMPLICATION_SIZE    = 36
 LABEL_COLOR          = rl.Color(255, 255, 255, int(255 * 0.9))
 COMPLICATION_GREY    = rl.Color(0xAA, 0xAA, 0xAA, 255)
+BADGE_GREEN_BG       = rl.Color(51, 171, 76, 50)          # green chip background
+BADGE_GREEN_FG       = rl.Color(175, 235, 185, 200)       # green-tinted text
+CARD_ACTIVE_TINT     = rl.Color(140, 230, 150, 255)       # visible green tint for card bg
 PRESSED_SCALE = 1.15 if DO_ZOOM else 1.07
 
 
@@ -122,6 +126,7 @@ class BigButton(Widget):
     self._shake_start: float | None = None
 
     self._rotate_icon_t: float | None = None
+    self._badge_labels: list[str] | None = None
 
     self._label = UnifiedLabel(text, font_size=self._get_label_font_size(), font_weight=FontWeight.BOLD,
                                text_color=LABEL_COLOR, alignment_vertical=rl.GuiTextAlignmentVertical.TEXT_ALIGN_BOTTOM, scroll=scroll,
@@ -151,26 +156,50 @@ class BigButton(Widget):
     return int(self._rect.width - self.LABEL_HORIZONTAL_PADDING * 2 - icon_size)
 
   def _get_label_font_size(self):
-    if len(self.text) <= 18:
-      return 48
-    else:
-      return 42
+    return 42
 
   def _update_label_layout(self):
     self._label.set_font_size(self._get_label_font_size())
-    if self.value:
+    if self.value or self._badge_labels:
       self._label.set_alignment_vertical(rl.GuiTextAlignmentVertical.TEXT_ALIGN_TOP)
     else:
       self._label.set_alignment_vertical(rl.GuiTextAlignmentVertical.TEXT_ALIGN_BOTTOM)
 
   def set_text(self, text: str):
+    if text == self.text:
+      return
     self.text = text
     self._label.set_text(text)
     self._update_label_layout()
 
+  def set_subtitle_font_size(self, size: int):
+    self._sub_label.set_font_size(size)
+
   def set_value(self, value: str):
+    if value == self.value and self._badge_labels is None:
+      return
     self.value = value
+    self._badge_labels = None
     self._sub_label.set_text(value)
+    self._update_label_layout()
+
+  def set_badges(self, entries: list[tuple[str, str]]):
+    """Set badge pill chips from (key, value) pairs.
+
+    - 'off' values are hidden
+    - 'on' values show just the key
+    - Other values show 'key • value'
+    """
+    labels = []
+    for key, val in entries:
+      if val == 'off':
+        continue
+      labels.append(key if val == 'on' else f"{key}:{val}")
+    new_labels = labels or None
+    if new_labels == self._badge_labels:
+      return
+    self._badge_labels = new_labels
+    self.value = ""
     self._update_label_layout()
 
   def get_value(self) -> str:
@@ -209,6 +238,54 @@ class BigButton(Widget):
     btn_y = self._rect.y + (self._rect.height * (1 - scale)) / 2
     return txt_bg, btn_x, btn_y, scale
 
+  def _draw_badges(self, rect: rl.Rectangle):
+    """Render cached badge labels as pill chips in a flow layout."""
+    font = gui_app.font(FontWeight.MONO)
+    font_size = 28
+    h_pad = 12
+    gap = 10
+
+    # Measure each badge
+    specs = []
+    for label in self._badge_labels:
+      text_w = measure_text_cached(font, label, font_size).x
+      specs.append((label, text_w + h_pad * 2, text_w))
+
+    # Flow layout: wrap into rows
+    rows: list[list] = []
+    current_row: list = []
+    row_width = 0.0
+    for spec in specs:
+      w = spec[1]
+      needed = w + (gap if current_row else 0)
+      if current_row and row_width + needed > rect.width:
+        rows.append(current_row)
+        current_row = [spec]
+        row_width = w
+      else:
+        current_row.append(spec)
+        row_width += needed
+    if current_row:
+      rows.append(current_row)
+
+    # Fit badge height to available space
+    num_rows = len(rows)
+    text_h = measure_text_cached(font, "Xg", font_size).y  # representative line height
+    max_h = (rect.height - gap * (num_rows - 1)) / num_rows
+    badge_h = max(text_h, min(text_h + 4, max_h))
+    v_pad = (badge_h - text_h) / 2
+
+    # Draw rows bottom-up
+    cy = rect.y + rect.height - badge_h
+    for row in reversed(rows):
+      cx = rect.x
+      for label, badge_w, text_w in row:
+        rl.draw_rectangle_rounded(rl.Rectangle(cx, cy, badge_w, badge_h), 0.5, 6, BADGE_GREEN_BG)
+        rl.draw_text_ex(font, label, rl.Vector2(cx + (badge_w - text_w) / 2, cy + v_pad),
+                        font_size, 0, BADGE_GREEN_FG)
+        cx += badge_w + gap
+      cy -= badge_h + gap
+
   def _draw_content(self, btn_y: float):
     # LABEL ------------------------------------------------------------------
     label_x = self._rect.x + self.LABEL_HORIZONTAL_PADDING
@@ -219,11 +296,14 @@ class BigButton(Widget):
                               self._rect.height - self.LABEL_VERTICAL_PADDING * 2)
     self._label.render(label_rect)
 
-    if self.value:
+    if self.value or self._badge_labels:
       label_y = btn_y + self.LABEL_VERTICAL_PADDING + self._label.get_content_height(self._width_hint())
       sub_label_height = btn_y + self._rect.height - self.LABEL_VERTICAL_PADDING - label_y
       sub_label_rect = rl.Rectangle(label_x, label_y, self._width_hint(), sub_label_height)
-      self._sub_label.render(sub_label_rect)
+      if self._badge_labels:
+        self._draw_badges(sub_label_rect)
+      else:
+        self._sub_label.render(sub_label_rect)
 
     # ICON -------------------------------------------------------------------
     if self._txt_icon:
@@ -241,6 +321,7 @@ class BigButton(Widget):
 
   def _render(self, _):
     txt_bg, btn_x, btn_y, scale = self._handle_background()
+    bg_tint = CARD_ACTIVE_TINT if self._badge_labels else rl.WHITE
 
     if self._scroll:
       # draw black background since images are transparent
@@ -248,9 +329,9 @@ class BigButton(Widget):
       rl.draw_rectangle_rounded(scaled_rect, 0.4, 7, rl.Color(0, 0, 0, int(255 * 0.5)))
 
       self._draw_content(btn_y)
-      rl.draw_texture_ex(txt_bg, (btn_x, btn_y), 0, scale, rl.WHITE)
+      rl.draw_texture_ex(txt_bg, (btn_x, btn_y), 0, scale, bg_tint)
     else:
-      rl.draw_texture_ex(txt_bg, (btn_x, btn_y), 0, scale, rl.WHITE)
+      rl.draw_texture_ex(txt_bg, (btn_x, btn_y), 0, scale, bg_tint)
       self._draw_content(btn_y)
 
 
@@ -259,6 +340,10 @@ class BigToggle(BigButton):
     super().__init__(text, value, "")
     self._checked = initial_state
     self._toggle_callback = toggle_callback
+
+  @property
+  def is_checked(self) -> bool:
+    return self._checked
 
   def _load_images(self):
     super()._load_images()
@@ -300,7 +385,7 @@ class BigMultiToggle(BigToggle):
     self.set_value(self._options[0])
 
   def _width_hint(self) -> int:
-    return int(self._rect.width - self.LABEL_HORIZONTAL_PADDING * 2 - self._txt_enabled_toggle.width)
+    return int(self._rect.width - self.LABEL_HORIZONTAL_PADDING - self._txt_enabled_toggle.width)
 
   def _handle_mouse_release(self, mouse_pos: MousePos):
     super()._handle_mouse_release(mouse_pos)
@@ -319,9 +404,11 @@ class BigMultiToggle(BigToggle):
     x = self._rect.x + self._rect.width - self._txt_enabled_toggle.width
     y = btn_y
 
-    for i in range(len(self._options)):
+    n = len(self._options)
+    spacing = min(35, (self._rect.height - self._txt_enabled_toggle.height) / max(n - 1, 1))
+    for i in range(n):
       self._draw_pill(x, y, checked_idx == i)
-      y += 35
+      y += spacing
 
 
 class BigMultiParamToggle(BigMultiToggle):
@@ -341,34 +428,129 @@ class BigMultiParamToggle(BigMultiToggle):
     new_idx = self._options.index(self.value)
     self._params.put_nonblocking(self._param, new_idx)
 
+  def refresh(self):
+    new_value = self._options[self._params.get(self._param) or 0]
+    if new_value != self.value:
+      self.set_value(new_value)
 
-class BigParamControl(BigToggle):
-  def __init__(self, text: str, param: str, toggle_callback: Callable | None = None):
-    super().__init__(text, "", toggle_callback=toggle_callback)
-    self.param = param
-    self.params = Params()
-    self.set_checked(self.params.get_bool(self.param, False))
 
-  def _handle_mouse_release(self, mouse_pos: MousePos):
-    super()._handle_mouse_release(mouse_pos)
-    self.params.put_bool(self.param, self._checked)
+class _ParamControlMixin:
+  """Shared param management for BigParamControl and BigCircleParamControl."""
+
+  def _init_param(self, param: str):
+    self._param_key = param
+    self._params = Params()
+    self.set_checked(self._params.get_bool(self._param_key, False))
+
+  def _write_param(self):
+    self._params.put_bool(self._param_key, self._checked)
 
   def refresh(self):
-    self.set_checked(self.params.get_bool(self.param, False))
+    new_state = self._params.get_bool(self._param_key, False)
+    if new_state != self._checked:
+      self.set_checked(new_state)
 
 
-# TODO: param control base class
-class BigCircleParamControl(BigCircleToggle):
+class BigParamControl(_ParamControlMixin, BigToggle):
+  def __init__(self, text: str, param: str, toggle_callback: Callable | None = None):
+    BigToggle.__init__(self, text, "", toggle_callback=toggle_callback)
+    self._init_param(param)
+
+  def _handle_mouse_release(self, mouse_pos: MousePos):
+    # Write param before BigToggle fires toggle_callback so the callback sees the new value
+    Widget._handle_mouse_release(self, mouse_pos)
+    self._checked = not self._checked
+    self._write_param()
+    if self._toggle_callback:
+      self._toggle_callback(self._checked)
+
+
+class BigCircleParamControl(_ParamControlMixin, BigCircleToggle):
   def __init__(self, icon: str, param: str, toggle_callback: Callable | None = None, icon_size: tuple[int, int] = (64, 53),
                icon_offset: tuple[int, int] = (0, 0)):
-    super().__init__(icon, toggle_callback, icon_size=icon_size, icon_offset=icon_offset)
-    self._param = param
-    self.params = Params()
-    self.set_checked(self.params.get_bool(self._param, False))
+    BigCircleToggle.__init__(self, icon, toggle_callback, icon_size=icon_size, icon_offset=icon_offset)
+    self._init_param(param)
 
   def _handle_mouse_release(self, mouse_pos: MousePos):
     super()._handle_mouse_release(mouse_pos)
-    self.params.put_bool(self._param, self._checked)
+    self._write_param()
+
+
+class BigParamOption(BigButton):
+  """A BigButton that shows a numeric param value; opens a picker screen on tap."""
+
+  def __init__(self, text: str, param: str, min_value: int, max_value: int,
+               value_change_step: int = 1, label_callback: Callable | None = None,
+               value_map: dict[int, int] | None = None, float_param: bool = False,
+               picker_label_callback: Callable | None = None,
+               picker_unit: str | Callable[[], str] = "",
+               picker_item_width: int = 0):
+    super().__init__(text, "")
+    self._param = param
+    self._min_value = min_value
+    self._max_value = max_value
+    self._step = value_change_step
+    self._label_callback = label_callback
+    self._value_map = value_map
+    self._float_param = float_param
+    self._picker_label_callback = picker_label_callback
+    self._picker_unit = picker_unit
+    self._picker_item_width = picker_item_width
+    self._params = Params()
+    self._current = self._read_value()
+    self._update_display()
+    self.set_click_callback(self._open_picker)
+
+  def _read_value(self) -> int:
+    val = self._params.get(self._param, return_default=True)
+    try:
+      return int(float(val)) if val is not None else self._min_value
+    except (ValueError, TypeError):
+      return self._min_value
+
+  def _display_value(self) -> int:
+    """Return the mapped display value if value_map exists, otherwise the raw value."""
+    if self._value_map and self._current in self._value_map:
+      return self._value_map[self._current]
+    return self._current
+
+  def _update_display(self):
+    display_val = self._display_value()
+    if self._label_callback:
+      self.set_value(self._label_callback(display_val))
+    else:
+      self.set_value(str(display_val))
 
   def refresh(self):
-    self.set_checked(self.params.get_bool(self._param, False))
+    new = self._read_value()
+    if new != self._current:
+      self._current = new
+      self._update_display()
+
+  def _open_picker(self):
+    from openpilot.system.ui.widgets.scroller import NavScroller
+    picker = self.create_picker_screen()
+    view = NavScroller(scroll_indicator=False, pad=0)
+    view.set_back_callback(lambda: self.refresh())
+    view.add_widgets([picker])
+    view._scroller.set_scrolling_enabled(False)
+    gui_app.push_widget(view)
+
+  def create_picker_screen(self):
+    """Factory: create a NumberPickerScreen from this option's config."""
+    from openpilot.selfdrive.ui.mici.widgets.number_picker import NumberPickerScreen
+    kwargs = {}
+    if self._picker_item_width:
+      kwargs['item_width'] = self._picker_item_width
+    return NumberPickerScreen(
+      title=self.text,
+      param=self._param,
+      min_value=self._min_value,
+      max_value=self._max_value,
+      step=self._step,
+      label_callback=self._picker_label_callback,
+      value_map=self._value_map,
+      float_param=self._float_param,
+      unit=self._picker_unit,
+      **kwargs,
+    )

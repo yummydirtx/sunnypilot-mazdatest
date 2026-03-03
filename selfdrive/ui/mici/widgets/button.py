@@ -276,15 +276,18 @@ class BigButton(Widget):
     badge_h = max(text_h, min(text_h + 4, max_h))
     v_pad = (badge_h - text_h) / 2
 
-    # Draw rows bottom-up
+    # Draw rows bottom-up, offset left so first badge *text* aligns with title
+    avail_w = rect.width
     cy = rect.y + rect.height - badge_h
     for row in reversed(rows):
+      total_badge_w = sum(bw for _, bw, _ in row)
+      row_gap = gap if len(row) <= 1 else (avail_w - total_badge_w) / (len(row) - 1)
       cx = rect.x
       for label, badge_w, text_w in row:
         rl.draw_rectangle_rounded(rl.Rectangle(cx, cy, badge_w, badge_h), 0.5, 6, BADGE_GREEN_BG)
         rl.draw_text_ex(font, label, rl.Vector2(cx + (badge_w - text_w) / 2, cy + v_pad),
                         font_size, 0, BADGE_GREEN_FG)
-        cx += badge_w + gap
+        cx += badge_w + row_gap
       cy -= badge_h + gap
 
   def _draw_content(self, btn_y: float):

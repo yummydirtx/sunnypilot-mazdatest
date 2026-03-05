@@ -438,7 +438,7 @@ class BigMultiToggle(BigToggle):
     self.set_value(self._options[0])
 
   def _width_hint(self) -> int:
-    return int(self._rect.width - self.LABEL_HORIZONTAL_PADDING - self._txt_enabled_toggle.width)
+    return int(self._rect.width - self.LABEL_HORIZONTAL_PADDING * 2 - self._txt_enabled_toggle.width)
 
   def _handle_mouse_release(self, mouse_pos: MousePos):
     super()._handle_mouse_release(mouse_pos)

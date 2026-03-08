@@ -17,7 +17,7 @@ from openpilot.selfdrive.ui.lib.api_helpers import get_token
 from openpilot.selfdrive.ui.mici.widgets.button import BigButton
 from openpilot.selfdrive.ui.ui_state import ui_state, device
 from openpilot.system.athena.registration import UNREGISTERED_DONGLE_ID
-from openpilot.system.ui.widgets.scroller import NavScroller
+from openpilot.selfdrive.ui.sunnypilot.mici.widgets.scroller import NavScroller
 
 UPDATE_INTERVAL = 30
 
@@ -32,23 +32,17 @@ class TripsLayoutMici(NavScroller):
     self._session = requests.Session()
     self._stats = self._get_stats()
 
-    self._all_drives = BigButton("all time drives")
-    self._all_drives.set_enabled(False)
-    self._all_distance = BigButton("all time distance")
-    self._all_distance.set_enabled(False)
-    self._all_hours = BigButton("all time hours")
-    self._all_hours.set_enabled(False)
-    self._week_drives = BigButton("week drives")
-    self._week_drives.set_enabled(False)
-    self._week_distance = BigButton("week distance")
-    self._week_distance.set_enabled(False)
-    self._week_hours = BigButton("week hours")
-    self._week_hours.set_enabled(False)
+    STAT_LABELS = [
+      "all time drives", "all time distance", "all time hours",
+      "week drives", "week distance", "week hours",
+    ]
+    self._stat_buttons = []
+    for label in STAT_LABELS:
+      btn = BigButton(label)
+      btn.set_enabled(False)
+      self._stat_buttons.append(btn)
 
-    self._scroller.add_widgets([
-      self._all_drives, self._all_distance, self._all_hours,
-      self._week_drives, self._week_distance, self._week_hours,
-    ])
+    self._scroller.add_widgets(self._stat_buttons)
 
     self._format_stats()
 
@@ -101,13 +95,16 @@ class TripsLayoutMici(NavScroller):
       distance = data.get("distance", 0)
       return str(int(distance * CV.MPH_TO_KPH)) if is_metric else str(int(distance))
 
-    self._all_drives.set_value(str(int(all_time.get("routes", 0))))
-    self._all_distance.set_value(f"{fmt_dist(all_time)} {dist_unit}")
-    self._all_hours.set_value(f"{int(all_time.get('minutes', 0) / 60)} hrs")
+    def fmt_period(data):
+      return [
+        str(int(data.get("routes", 0))),
+        f"{fmt_dist(data)} {dist_unit}",
+        f"{int(data.get('minutes', 0) / 60)} hrs",
+      ]
 
-    self._week_drives.set_value(str(int(week.get("routes", 0))))
-    self._week_distance.set_value(f"{fmt_dist(week)} {dist_unit}")
-    self._week_hours.set_value(f"{int(week.get('minutes', 0) / 60)} hrs")
+    values = fmt_period(all_time) + fmt_period(week)
+    for btn, val in zip(self._stat_buttons, values, strict=True):
+      btn.set_value(val)
 
   def _update_state(self):
     super()._update_state()

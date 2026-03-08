@@ -6,10 +6,11 @@ See the LICENSE.md file in the root directory for more details.
 """
 
 
-from openpilot.selfdrive.ui.mici.widgets.button import BigParamControl, BigMultiParamToggle
+from openpilot.selfdrive.ui.mici.widgets.button import BigParamControl
+from openpilot.selfdrive.ui.sunnypilot.mici.widgets.button import BigMultiParamToggleSP
 from openpilot.selfdrive.ui.ui_state import ui_state
 from openpilot.system.ui.widgets import Widget
-from openpilot.system.ui.widgets.scroller import NavScroller
+from openpilot.selfdrive.ui.sunnypilot.mici.widgets.scroller import NavScroller
 
 
 TOGGLE_PARAMS = [
@@ -39,11 +40,11 @@ class VisualsLayoutMici(NavScroller):
       self._toggles[param] = toggle
       items.append(toggle)
 
-    self._chevron_info = BigMultiParamToggle(
+    self._chevron_info = BigMultiParamToggleSP(
       "chevron info", "ChevronInfo",
       ["off", "dist", "speed", "time", "all"],
     )
-    self._dev_ui_info = BigMultiParamToggle(
+    self._dev_ui_info = BigMultiParamToggleSP(
       "dev UI", "DevUIInfo",
       ["off", "bottom", "right", "R&B"],
     )
@@ -61,7 +62,7 @@ class VisualsLayoutMici(NavScroller):
 
     has_long = ui_state.has_longitudinal_control
     self._chevron_info.set_enabled(has_long)
-    if not has_long and self._prev_has_long is True:
+    if not has_long and self._prev_has_long is not False:
       ui_state.params.put("ChevronInfo", 0)
       self._chevron_info.refresh()
     self._prev_has_long = has_long

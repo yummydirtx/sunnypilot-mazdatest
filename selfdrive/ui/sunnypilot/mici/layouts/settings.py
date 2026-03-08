@@ -15,48 +15,33 @@ from openpilot.selfdrive.ui.sunnypilot.mici.layouts.trips import TripsLayoutMici
 from openpilot.selfdrive.ui.sunnypilot.mici.layouts.visuals import VisualsLayoutMici
 from openpilot.system.ui.lib.application import gui_app
 
+SP_ICON = "../../sunnypilot/selfdrive/assets/offroad"
+
+PANELS = [
+  ("sunnylink", SunnylinkLayoutMici, "icons_mici/settings/developer/ssh.png"),
+  ("models",    ModelsLayoutMici,    f"{SP_ICON}/icon_models.png"),
+  ("cruise",    CruiseLayoutMici,    f"{SP_ICON}/icon_vehicle.png"),
+  ("steering",  SteeringLayoutMici,  f"{SP_ICON}/icon_lateral.png"),
+  ("display",   DisplayLayoutMici,   f"{SP_ICON}/icon_display.png"),
+  ("visuals",   VisualsLayoutMici,   f"{SP_ICON}/icon_visuals.png"),
+  ("trips",     TripsLayoutMici,     f"{SP_ICON}/icon_trips.png"),
+]
+
 
 class SettingsLayoutSP(OP.SettingsLayout):
   def __init__(self):
     OP.SettingsLayout.__init__(self)
 
-    sunnylink_panel = SunnylinkLayoutMici(back_callback=gui_app.pop_widget)
-    sunnylink_btn = BigButton("sunnylink", "", "icons_mici/settings/developer/ssh.png")
-    sunnylink_btn.set_click_callback(lambda: gui_app.push_widget(sunnylink_panel))
-
-    models_panel = ModelsLayoutMici(back_callback=gui_app.pop_widget)
-    models_btn = BigButton("models", "", "../../sunnypilot/selfdrive/assets/offroad/icon_models.png")
-    models_btn.set_click_callback(lambda: gui_app.push_widget(models_panel))
-
-    cruise_panel = CruiseLayoutMici()
-    cruise_btn = BigButton("cruise", "", "../../sunnypilot/selfdrive/assets/offroad/icon_vehicle.png")
-    cruise_btn.set_click_callback(lambda: gui_app.push_widget(cruise_panel))
-
-    steering_panel = SteeringLayoutMici()
-    steering_btn = BigButton("steering", "", "../../sunnypilot/selfdrive/assets/offroad/icon_lateral.png")
-    steering_btn.set_click_callback(lambda: gui_app.push_widget(steering_panel))
-
-    display_panel = DisplayLayoutMici()
-    display_btn = BigButton("display", "", "../../sunnypilot/selfdrive/assets/offroad/icon_display.png")
-    display_btn.set_click_callback(lambda: gui_app.push_widget(display_panel))
-
-    visuals_panel = VisualsLayoutMici()
-    visuals_btn = BigButton("visuals", "", "../../sunnypilot/selfdrive/assets/offroad/icon_visuals.png")
-    visuals_btn.set_click_callback(lambda: gui_app.push_widget(visuals_panel))
-
-    trips_panel = TripsLayoutMici()
-    trips_btn = BigButton("trips", "", "../../sunnypilot/selfdrive/assets/offroad/icon_trips.png")
-    trips_btn.set_click_callback(lambda: gui_app.push_widget(trips_panel))
+    sp_buttons = []
+    for label, panel_cls, icon in PANELS:
+      panel = panel_cls()
+      btn = BigButton(label, "", icon)
+      btn.set_click_callback(lambda p=panel: gui_app.push_widget(p))
+      sp_buttons.append(btn)
 
     items = self._scroller._items.copy()
-
-    items.insert(1, sunnylink_btn)
-    items.insert(2, models_btn)
-    items.insert(3, cruise_btn)
-    items.insert(4, steering_btn)
-    items.insert(5, display_btn)
-    items.insert(6, visuals_btn)
-    items.insert(7, trips_btn)
+    for i, btn in enumerate(sp_buttons):
+      items.insert(1 + i, btn)
     self._scroller._items.clear()
     for item in items:
       self._scroller.add_widget(item)

@@ -158,12 +158,13 @@ def capture_sub_view(view, filename):
 
 def capture_picker(option, filename):
   """Create and capture a picker screen for a BigParamOption."""
-  from openpilot.system.ui.widgets.scroller import NavScroller
+  from openpilot.selfdrive.ui.sunnypilot.mici.widgets.scroller import NavScroller
 
   picker = option.create_picker_screen()
-  view = NavScroller(scroll_indicator=False, pad=0)
+  view = NavScroller()
   view.add_widgets([picker])
   view.set_scrolling_enabled(False)
+  view._scroller._show_scroll_indicator = False
   view.show_event()
   capture(view, filename)
 

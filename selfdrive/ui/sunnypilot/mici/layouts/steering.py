@@ -19,6 +19,14 @@ from openpilot.system.ui.widgets.scroller import NavScroller
 MADS_STEERING_MODE_LABELS = ["remain", "pause", "disengage"]
 
 
+def _bb(val: bool) -> str:
+  return "on" if val else "off"
+
+
+def _speed_unit():
+  return "km/h" if ui_state.is_metric else "mph"
+
+
 # ---------------------------------------------------------------------------
 # MADS sub-panel items
 # ---------------------------------------------------------------------------
@@ -49,8 +57,8 @@ def _build_blinker_items():
   speed = BigParamOption(
     "blinker speed", "BlinkerMinLateralControlSpeed",
     min_value=0, max_value=255, value_change_step=5,
-    label_callback=lambda v: f'{v} {"km/h" if ui_state.is_metric else "mph"}',
-    picker_unit=lambda: "km/h" if ui_state.is_metric else "mph",
+    label_callback=lambda v: f"{v} {_speed_unit()}",
+    picker_unit=_speed_unit,
   )
   delay = BigParamOption(
     "blinker delay", "BlinkerLateralReengageDelay",
@@ -181,8 +189,8 @@ class SteeringLayoutMici(NavScroller):
     if not mads_on:
       self._mads_settings_btn.set_value("off")
     else:
-      cruise = "on" if ui_state.params.get_bool("MadsMainCruiseAllowed") else "off"
-      unified = "on" if ui_state.params.get_bool("MadsUnifiedEngagementMode") else "off"
+      cruise = _bb(ui_state.params.get_bool("MadsMainCruiseAllowed"))
+      unified = _bb(ui_state.params.get_bool("MadsUnifiedEngagementMode"))
       steer_idx = ui_state.params.get("MadsSteeringMode") or 0
       steer_mode = MADS_STEERING_MODE_LABELS[min(steer_idx, len(MADS_STEERING_MODE_LABELS) - 1)]
       self._mads_settings_btn.set_badges([
@@ -197,7 +205,7 @@ class SteeringLayoutMici(NavScroller):
       self._blinker_settings_btn.set_value("off")
     else:
       speed_val = ui_state.params.get("BlinkerMinLateralControlSpeed", return_default=True) or 0
-      unit = "km/h" if ui_state.is_metric else "mph"
+      unit = _speed_unit()
       delay_val = ui_state.params.get("BlinkerLateralReengageDelay", return_default=True) or 0
       self._blinker_settings_btn.set_badges([
         ("enabled", "on"),
@@ -205,8 +213,8 @@ class SteeringLayoutMici(NavScroller):
         ("delay", f"{delay_val}s"),
       ])
 
-    lc_auto = "on" if ui_state.params.get_bool("AutoLaneChangeTimer") else "off"
-    lc_bsm = "on" if ui_state.params.get_bool("AutoLaneChangeBsmDelay") else "off"
+    lc_auto = _bb(ui_state.params.get_bool("AutoLaneChangeTimer"))
+    lc_bsm = _bb(ui_state.params.get_bool("AutoLaneChangeBsmDelay"))
     if lc_auto == "off" and lc_bsm == "off":
       self._lane_change_btn.set_value("off")
     else:
@@ -220,8 +228,8 @@ class SteeringLayoutMici(NavScroller):
     if not enforce_torque:
       self._torque_settings_btn.set_value("off")
     else:
-      self_tune = "on" if ui_state.params.get_bool("LiveTorqueParamsToggle") else "off"
-      custom = "on" if ui_state.params.get_bool("CustomTorqueParams") else "off"
+      self_tune = _bb(ui_state.params.get_bool("LiveTorqueParamsToggle"))
+      custom = _bb(ui_state.params.get_bool("CustomTorqueParams"))
       self._torque_settings_btn.set_badges([
         ("enabled", "on"),
         ("self-tune", self_tune),
@@ -288,6 +296,7 @@ class SteeringLayoutMici(NavScroller):
     # Disable subcategory buttons when torque is off
     for item in self._tq_items_rest:
       item.set_enabled(enforce_torque)
+      item.set_active(enforce_torque)
 
     # Self-tune subcategory button summary
     self_tune_on = ui_state.params.get_bool("LiveTorqueParamsToggle")
@@ -298,7 +307,7 @@ class SteeringLayoutMici(NavScroller):
       self._prev_self_tune_on = False
     else:
       self._prev_self_tune_on = True
-      relaxed = "on" if ui_state.params.get_bool("LiveTorqueParamsRelaxedToggle") else "off"
+      relaxed = _bb(ui_state.params.get_bool("LiveTorqueParamsRelaxedToggle"))
       self._tq_self_tune_btn.set_badges([
         ("enabled", "on"),
         ("less-restrict", relaxed),
@@ -309,11 +318,11 @@ class SteeringLayoutMici(NavScroller):
     if not custom_on:
       self._tq_custom_btn.set_value("off")
     else:
-      manual_rt = "on" if ui_state.params.get_bool("TorqueParamsOverrideEnabled") else "off"
+      manual_rt = _bb(ui_state.params.get_bool("TorqueParamsOverrideEnabled"))
       lat_raw = ui_state.params.get("TorqueParamsOverrideLatAccelFactor", return_default=True) or 1
       fric_raw = ui_state.params.get("TorqueParamsOverrideFriction", return_default=True) or 1
-      lat_val = int(float(lat_raw)) / 100
-      fric_val = int(float(fric_raw)) / 100
+      lat_val = int(lat_raw) / 100
+      fric_val = int(fric_raw) / 100
       self._tq_custom_btn.set_badges([
         ("enabled", "on"),
         ("realtime", manual_rt),

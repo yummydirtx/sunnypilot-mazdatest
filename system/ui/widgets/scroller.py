@@ -445,6 +445,13 @@ class Scroller(Widget):
   def set_reset_scroll_at_show(self, scroll: bool) -> None:
     self._scroller.set_reset_scroll_at_show(scroll)
 
+  def set_scrolling_enabled(self, enabled) -> None:
+    self._scroller.set_scrolling_enabled(enabled)
+
+  @property
+  def scroll_panel(self):
+    return self._scroller.scroll_panel
+
   def show_event(self):
     super().show_event()
     self._scroller.show_event()
@@ -460,7 +467,8 @@ class Scroller(Widget):
 class NavScroller(NavWidget, Scroller):
   """Full screen Scroller that properly supports nav stack w/ animations"""
   def __init__(self, **kwargs):
-    super().__init__(**kwargs)
+    super().__init__()  # NavWidget doesn't accept kwargs; Scroller creates a default _scroller via MRO
+    self._scroller = _Scroller([], **kwargs)
     # pass down enabled to child widget for nav stack + disable while swiping away NavWidget
     self._scroller.set_enabled(lambda: self.enabled and not self.is_dismissing)
 

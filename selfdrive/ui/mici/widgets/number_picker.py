@@ -1,3 +1,4 @@
+import numpy as np
 import pyray as rl
 from collections.abc import Callable
 
@@ -35,6 +36,11 @@ EDGE_ALPHA = 0.1
 class PickerItem(Widget):
   """A lightweight label widget for a single picker value."""
 
+  # Distance breakpoints and corresponding visual values for np.interp
+  _DIST_TIERS = [0, 1, 2, 3]
+  _FONT_SIZES = [CENTER_FONT_SIZE, ADJ_FONT_SIZE, FAR_FONT_SIZE, EDGE_FONT_SIZE]
+  _ALPHAS = [CENTER_ALPHA, ADJ_ALPHA, FAR_ALPHA, EDGE_ALPHA]
+
   def __init__(self, raw_value: int, display_label: str, on_tap: Callable[[int], None] | None = None,
                item_width: int = ITEM_WIDTH):
     super().__init__()
@@ -59,25 +65,10 @@ class PickerItem(Widget):
     item_center_x = self._rect.x + self._rect.width / 2
     dist = abs(item_center_x - parent_center_x) / self._item_width
 
-    # Interpolate font size and alpha based on distance
-    if dist < 0.5:
-      font_size = CENTER_FONT_SIZE
-      alpha = CENTER_ALPHA
-      font_weight = FontWeight.BOLD
-    elif dist < 1.5:
-      t = (dist - 0.5)
-      font_size = int(CENTER_FONT_SIZE + (ADJ_FONT_SIZE - CENTER_FONT_SIZE) * t)
-      alpha = CENTER_ALPHA + (ADJ_ALPHA - CENTER_ALPHA) * t
-      font_weight = FontWeight.ROMAN
-    elif dist < 2.5:
-      t = (dist - 1.5)
-      font_size = int(ADJ_FONT_SIZE + (FAR_FONT_SIZE - ADJ_FONT_SIZE) * t)
-      alpha = ADJ_ALPHA + (FAR_ALPHA - ADJ_ALPHA) * t
-      font_weight = FontWeight.ROMAN
-    else:
-      font_size = EDGE_FONT_SIZE
-      alpha = EDGE_ALPHA
-      font_weight = FontWeight.ROMAN
+    # Continuous interpolation of font size, alpha, and weight based on distance
+    font_size = int(np.interp(dist, self._DIST_TIERS, self._FONT_SIZES))
+    alpha = float(np.interp(dist, self._DIST_TIERS, self._ALPHAS))
+    font_weight = FontWeight.BOLD if dist < 0.5 else FontWeight.ROMAN
 
     font = gui_app.font(font_weight)
     color = rl.Color(255, 255, 255, int(255 * alpha))
@@ -88,7 +79,7 @@ class PickerItem(Widget):
       # Multi-line: main line at full size, subtitle smaller and dimmer
       lines = self.display_label.split('\n', 1)
 
-      # Shrink main line to fit item width (same as single-line path)
+      # Shrink to fit: text labels like "default" (ui timeout) overflow at size 56
       main_size = measure_text_cached(font, lines[0], font_size)
       if main_size.x > max_width and main_size.x > 0:
         font_size = max(int(font_size * max_width / main_size.x), 14)
@@ -108,7 +99,7 @@ class PickerItem(Widget):
       sub_x = self._rect.x + (self._rect.width - sub_size.x) / 2
       rl.draw_text_ex(sub_font, lines[1], rl.Vector2(sub_x, main_y + main_size.y + gap), sub_font_size, 0, sub_color)
     else:
-      # Shrink font if label is too wide for item
+      # Shrink to fit: text labels like "default" (ui timeout) overflow at size 56
       text_size = measure_text_cached(font, self.display_label, font_size)
       if text_size.x > max_width and text_size.x > 0:
         font_size = max(int(font_size * max_width / text_size.x), 14)
@@ -136,6 +127,7 @@ class NumberPickerScreen(Widget):
     self._float_param = float_param
     self._unit = unit
     self._item_width = item_width
+    assert step > 0, "step must be positive"
     self._params = Params()
     self._last_center_value: int | None = None
 
@@ -173,7 +165,7 @@ class NumberPickerScreen(Widget):
 
   @property
   def _scroll_panel(self):
-    return self._scroller._scroller.scroll_panel
+    return self._scroller.scroll_panel
 
   def _center_index(self) -> int:
     """Compute center item index from scroll offset (independent of layout timing)."""
@@ -194,6 +186,7 @@ class NumberPickerScreen(Widget):
   def _read_value(self) -> int:
     val = self._params.get(self._param, return_default=True)
     try:
+      # float() needed: float_param options store values as float in params
       return int(float(val)) if val is not None else self._min_value
     except (ValueError, TypeError):
       return self._min_value
@@ -219,6 +212,11 @@ class NumberPickerScreen(Widget):
 
   def hide_event(self):
     super().hide_event()
+    self._scroller.hide_event()
+    # Snap offset to nearest item boundary so _center_index() returns the
+    # correct item even if the snap animation hasn't fully converged yet.
+    offset = self._scroll_panel.get_offset()
+    self._scroll_panel.set_offset(round(offset / self._item_width) * self._item_width)
     self._commit_value()
 
   def _update_state(self):
@@ -254,7 +252,8 @@ class NumberPickerScreen(Widget):
 
     # Unit label — resolve dynamically if callable, hide for non-numeric labels
     center = self._picker_items[self._center_index()] if self._picker_items else None
-    unit_text = self._unit() if callable(self._unit) else self._unit
+    unit_text = self._unit() if not isinstance(self._unit, str) else self._unit
+    # Hide unit for non-numeric labels (e.g. "auto" in brightness, "default" in timeout)
     if unit_text and center is not None:
       try:
         float(center.display_label.replace('\n', ''))

@@ -50,6 +50,8 @@ class TripsLayoutMici(NavScroller):
       self._week_drives, self._week_distance, self._week_hours,
     ])
 
+    self._format_stats()
+
     self._running = False
     self._update_thread: threading.Thread | None = None
 

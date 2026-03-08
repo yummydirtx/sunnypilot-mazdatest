@@ -103,7 +103,7 @@ class TripsLayoutMici(NavScroller):
       ]
 
     values = fmt_period(all_time) + fmt_period(week)
-    for btn, val in zip(self._stat_buttons, values):
+    for btn, val in zip(self._stat_buttons, values, strict=True):
       btn.set_value(val)
 
   def _update_state(self):

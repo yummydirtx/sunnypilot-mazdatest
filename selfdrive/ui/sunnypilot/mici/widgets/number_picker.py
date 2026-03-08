@@ -6,7 +6,7 @@ from openpilot.system.ui.lib.application import gui_app, FontWeight, MousePos
 from openpilot.system.ui.lib.scroll_panel2 import ScrollState
 from openpilot.system.ui.lib.text_measure import measure_text_cached
 from openpilot.system.ui.widgets import Widget
-from openpilot.system.ui.widgets.scroller import Scroller
+from openpilot.system.ui.widgets.scroller import _Scroller
 
 try:
   from openpilot.common.params import Params
@@ -16,11 +16,14 @@ except ImportError:
 ITEM_WIDTH = 100
 ITEM_HEIGHT = 140
 SCREEN_WIDTH = 536
-TITLE_HEIGHT = 50
-CAROUSEL_HEIGHT = 176  # SCREEN_HEIGHT(226) - TITLE_HEIGHT
+TITLE_HEIGHT = 46
+CAROUSEL_TOP = 36   # carousel overlaps title zone by 10px for tighter layout
+CAROUSEL_HEIGHT = 180
 
-# Selection band line color
-BAND_COLOR = rl.Color(255, 255, 255, int(255 * 0.15))
+# Selection band — precomputed gradient texture (see _build_band_texture)
+BAND_COLOR = rl.Color(255, 255, 255, int(255 * 0.25))
+BAND_TOP = CAROUSEL_TOP + 14
+BAND_FADE_LEN = 40
 
 # Font sizes and alphas for distance tiers
 CENTER_FONT_SIZE = 56
@@ -109,6 +112,36 @@ class PickerItem(Widget):
       rl.draw_text_ex(font, self.display_label, rl.Vector2(text_x, text_y), font_size, 0, color)
 
 
+def _build_band_texture():
+  """Build a 2px-wide vertical gradient strip: fade in → solid → fade out."""
+  band_h = CAROUSEL_HEIGHT - 14 * 2
+  fade = min(BAND_FADE_LEN, band_h // 3)
+  img = rl.gen_image_color(2, band_h, rl.Color(0, 0, 0, 0))
+  for y in range(band_h):
+    if y < fade:
+      a = int(BAND_COLOR.a * y / fade)
+    elif y >= band_h - fade:
+      a = int(BAND_COLOR.a * (band_h - 1 - y) / fade)
+    else:
+      a = BAND_COLOR.a
+    c = rl.Color(BAND_COLOR.r, BAND_COLOR.g, BAND_COLOR.b, a)
+    rl.image_draw_rectangle(img, 0, y, 2, 1, c)
+  tex = rl.load_texture_from_image(img)
+  rl.unload_image(img)
+  return tex
+
+
+# Lazy singleton — created on first use (needs OpenGL context)
+_band_texture = None
+
+
+def _get_band_texture():
+  global _band_texture
+  if _band_texture is None:
+    _band_texture = _build_band_texture()
+  return _band_texture
+
+
 class NumberPickerScreen(Widget):
   """Full picker sub-screen with title and horizontal snap-scrolling carousel."""
 
@@ -142,7 +175,8 @@ class NumberPickerScreen(Widget):
 
     # Horizontal scroller with snap, centered padding
     pad = (SCREEN_WIDTH - item_width) // 2
-    self._scroller = Scroller(
+    self._scroller = _Scroller(
+      self._picker_items,
       horizontal=True,
       snap_items=True,
       scroll_indicator=False,
@@ -150,7 +184,6 @@ class NumberPickerScreen(Widget):
       spacing=0,
       edge_shadows=False,
     )
-    self._scroller.add_widgets(self._picker_items)
     self._scroller.set_reset_scroll_at_show(False)
 
     self.set_rect(rl.Rectangle(0, 0, SCREEN_WIDTH, TITLE_HEIGHT + CAROUSEL_HEIGHT))
@@ -239,31 +272,30 @@ class NumberPickerScreen(Widget):
                     rl.Color(255, 255, 255, int(255 * 0.9)))
 
     # Carousel area
-    carousel_rect = rl.Rectangle(rect.x, rect.y + TITLE_HEIGHT, SCREEN_WIDTH, CAROUSEL_HEIGHT)
+    carousel_rect = rl.Rectangle(rect.x, rect.y + CAROUSEL_TOP, SCREEN_WIDTH, CAROUSEL_HEIGHT)
     self._scroller.render(carousel_rect)
-
-    # Selection band lines
-    band_left = rect.x + (SCREEN_WIDTH - self._item_width) / 2
-    band_right = band_left + self._item_width
-    band_top = rect.y + TITLE_HEIGHT + 10
-    band_bottom = rect.y + TITLE_HEIGHT + CAROUSEL_HEIGHT - 10
-    rl.draw_line_ex(rl.Vector2(band_left, band_top), rl.Vector2(band_left, band_bottom), 2, BAND_COLOR)
-    rl.draw_line_ex(rl.Vector2(band_right, band_top), rl.Vector2(band_right, band_bottom), 2, BAND_COLOR)
 
     # Unit label — resolve dynamically if callable, hide for non-numeric labels
     center = self._picker_items[self._center_index()] if self._picker_items else None
     unit_text = self._unit() if not isinstance(self._unit, str) else self._unit
-    # Hide unit for non-numeric labels (e.g. "auto" in brightness, "default" in timeout)
     if unit_text and center is not None:
       try:
         float(center.display_label.replace('\n', ''))
       except ValueError:
         unit_text = ""
+
+    # Selection band lines — precomputed gradient texture drawn at left and right edges
+    band_tex = _get_band_texture()
+    band_left = rect.x + (SCREEN_WIDTH - self._item_width) / 2 - 1
+    band_right = band_left + self._item_width
+    for x in (band_left, band_right):
+      rl.draw_texture(band_tex, int(x), int(rect.y + BAND_TOP), rl.WHITE)
+
     if unit_text:
-      unit_font = gui_app.font(FontWeight.ROMAN)
-      unit_font_size = 24
-      unit_color = rl.Color(255, 255, 255, int(255 * 0.35))
+      unit_font = gui_app.font(FontWeight.BOLD)
+      unit_font_size = 32
+      unit_color = rl.Color(255, 255, 255, int(255 * 0.5))
       unit_size = measure_text_cached(unit_font, unit_text, unit_font_size)
       unit_x = rect.x + (SCREEN_WIDTH - unit_size.x) / 2
-      unit_y = band_bottom - unit_size.y - 4
+      unit_y = rect.y + rect.height - unit_size.y - 2
       rl.draw_text_ex(unit_font, unit_text, rl.Vector2(unit_x, unit_y), unit_font_size, 0, unit_color)

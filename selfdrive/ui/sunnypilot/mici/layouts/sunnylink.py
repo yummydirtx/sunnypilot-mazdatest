@@ -15,7 +15,7 @@ from openpilot.selfdrive.ui.ui_state import ui_state
 from openpilot.sunnypilot.sunnylink.api import UNREGISTERED_SUNNYLINK_DONGLE_ID
 from openpilot.system.ui.lib.application import gui_app, MousePos
 from openpilot.system.ui.lib.multilang import tr
-from openpilot.system.ui.widgets.scroller import NavScroller
+from openpilot.selfdrive.ui.sunnypilot.mici.widgets.scroller import NavScroller
 from openpilot.system.version import sunnylink_consent_version, sunnylink_consent_declined
 
 

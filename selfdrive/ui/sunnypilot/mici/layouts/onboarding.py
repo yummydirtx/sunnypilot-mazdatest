@@ -10,7 +10,7 @@ from openpilot.selfdrive.ui.mici.widgets.button import BigCircleButton
 from openpilot.selfdrive.ui.mici.widgets.dialog import BigConfirmationDialogV2
 from openpilot.system.ui.lib.application import gui_app
 from openpilot.system.ui.mici_setup import GreyBigButton
-from openpilot.system.ui.widgets.scroller import NavScroller
+from openpilot.selfdrive.ui.sunnypilot.mici.widgets.scroller import NavScroller
 
 
 class SunnylinkConsentPage(NavScroller):

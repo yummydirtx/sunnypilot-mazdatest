@@ -7,14 +7,15 @@ See the LICENSE.md file in the root directory for more details.
 
 
 from cereal import car
-from openpilot.selfdrive.ui.mici.widgets.button import (
-  BigButton, BigParamControl, BigParamOption, BigMultiParamToggle,
+from openpilot.selfdrive.ui.mici.widgets.button import BigParamControl
+from openpilot.selfdrive.ui.sunnypilot.mici.widgets.button import (
+  BigButtonSP,
+  BigMultiParamToggleSP,
+  BigParamOption,
 )
-from openpilot.selfdrive.ui.sunnypilot.mici.layouts._nav import make_sub_view
+from openpilot.selfdrive.ui.sunnypilot.mici.widgets.scroller import NavScroller
 from openpilot.selfdrive.ui.ui_state import ui_state
 from openpilot.sunnypilot.mads.helpers import MadsSteeringModeOnBrake, mads_limited_settings
-from openpilot.system.ui.lib.application import gui_app
-from openpilot.system.ui.widgets.scroller import NavScroller
 
 MADS_STEERING_MODE_LABELS = ["remain", "pause", "disengage"]
 
@@ -33,11 +34,11 @@ def _speed_unit():
 def _build_mads_items():
   main_cruise = BigParamControl("main cruise toggle", "MadsMainCruiseAllowed")
   unified = BigParamControl("unified engagement", "MadsUnifiedEngagementMode")
-  steering_mode = BigMultiParamToggle(
+  steering_mode = BigMultiParamToggleSP(
     "steering on brake", "MadsSteeringMode",
     MADS_STEERING_MODE_LABELS,
   )
-  return [main_cruise, unified, steering_mode], main_cruise, unified, steering_mode
+  return main_cruise, unified, steering_mode
 
 
 # ---------------------------------------------------------------------------
@@ -46,7 +47,7 @@ def _build_mads_items():
 def _build_lane_change_items():
   auto_lc = BigParamControl("auto lane change", "AutoLaneChangeTimer")
   bsm_delay = BigParamControl("bsm delay", "AutoLaneChangeBsmDelay")
-  return [auto_lc, bsm_delay], auto_lc, bsm_delay
+  return auto_lc, bsm_delay
 
 
 # ---------------------------------------------------------------------------
@@ -66,7 +67,7 @@ def _build_blinker_items():
     label_callback=lambda v: f"{v} seconds",
     picker_unit="seconds",
   )
-  return [toggle, speed, delay], toggle, speed, delay
+  return toggle, speed, delay
 
 
 # ---------------------------------------------------------------------------
@@ -75,7 +76,7 @@ def _build_blinker_items():
 def _build_self_tune_items():
   self_tune = BigParamControl("enable self-tune", "LiveTorqueParamsToggle")
   relaxed = BigParamControl("less restrict", "LiveTorqueParamsRelaxedToggle")
-  return [self_tune, relaxed], self_tune, relaxed
+  return self_tune, relaxed
 
 
 def _build_custom_tune_items():
@@ -95,27 +96,32 @@ def _build_custom_tune_items():
     label_callback=lambda x: f"{x / 100}",
     float_param=True,
   )
-  return [custom_tune, manual_rt, lat_accel, friction], \
-    custom_tune, manual_rt, lat_accel, friction
+  return custom_tune, manual_rt, lat_accel, friction
 
 
 # ===========================================================================
 # Main Steering Layout
 # ===========================================================================
 class SteeringLayoutMici(NavScroller):
+  """Steering settings: MADS, lane change, blinker pause, torque control, NNLC.
+
+  Sub-panels are pre-built NavScrollers pushed onto the nav stack via link_sub_panel.
+  See CruiseLayoutMici for the transition tracking pattern explanation.
+  """
+
   def __init__(self):
     super().__init__()
 
-    # Transition tracking to avoid per-frame disk writes
+    # Transition tracking — None means first frame (triggers cleanup like False→False would)
     self._prev_torque_allowed: bool | None = None
     self._prev_mads_limited: bool | None = None
     self._prev_self_tune_on: bool | None = None
 
     # --- Main view items ---
-    self._mads_settings_btn = BigButton("mads")
-    self._lane_change_btn = BigButton("lane change")
-    self._blinker_settings_btn = BigButton("blinker pause")
-    self._torque_settings_btn = BigButton("torque control")
+    self._mads_settings_btn = BigButtonSP("mads")
+    self._lane_change_btn = BigButtonSP("lane change")
+    self._blinker_settings_btn = BigButtonSP("blinker pause")
+    self._torque_settings_btn = BigButtonSP("torque control")
 
     self._nnlc_toggle = BigParamControl("nnlc", "NeuralNetworkLateralControl")
 
@@ -132,43 +138,34 @@ class SteeringLayoutMici(NavScroller):
 
     # --- Sub-panel items ---
     self._mads_toggle = BigParamControl("enable mads", "Mads")
-    self._mads_items_rest, self._mads_main_cruise, self._mads_unified, self._mads_steering = _build_mads_items()
-    self._mads_items = [self._mads_toggle] + self._mads_items_rest
+    self._mads_main_cruise, self._mads_unified, self._mads_steering = _build_mads_items()
 
-    self._lc_items, self._lc_timer, self._lc_bsm = _build_lane_change_items()
+    self._lc_timer, self._lc_bsm = _build_lane_change_items()
 
-    self._blinker_items, self._blinker_toggle, self._blinker_speed, self._blinker_delay = _build_blinker_items()
+    self._blinker_toggle, self._blinker_speed, self._blinker_delay = _build_blinker_items()
 
     self._torque_toggle = BigParamControl("enable torque control", "EnforceTorqueControl")
 
     # Self-tune subcategory
-    self._tq_self_tune_btn = BigButton("self tune")
+    self._tq_self_tune_btn = BigButtonSP("self tune")
     self._tq_self_tune_btn.set_subtitle_font_size(24)
-    self._tq_self_tune_items, self._tq_self_tune, self._tq_relaxed = _build_self_tune_items()
+    self._tq_self_tune, self._tq_relaxed = _build_self_tune_items()
 
     # Custom tuning subcategory
-    self._tq_custom_btn = BigButton("custom tune")
+    self._tq_custom_btn = BigButtonSP("custom tune")
     self._tq_custom_btn.set_subtitle_font_size(24)
-    self._tq_custom_items, self._tq_custom, self._tq_manual_rt, \
-      self._tq_lat_accel, self._tq_friction = _build_custom_tune_items()
+    self._tq_custom, self._tq_manual_rt, self._tq_lat_accel, self._tq_friction = _build_custom_tune_items()
 
     self._tq_items_rest = [self._tq_self_tune_btn, self._tq_custom_btn]
     self._tq_items = [self._torque_toggle] + self._tq_items_rest
 
     # Pre-build sub-view NavScrollers (pushed onto nav stack on click)
-    self._mads_view = make_sub_view(self._mads_items)
-    self._lc_view = make_sub_view(self._lc_items)
-    self._blinker_view = make_sub_view(self._blinker_items)
-    self._tq_view = make_sub_view(self._tq_items)
-    self._tq_self_tune_view = make_sub_view(self._tq_self_tune_items)
-    self._tq_custom_view = make_sub_view(self._tq_custom_items)
-
-    self._mads_settings_btn.set_click_callback(lambda: gui_app.push_widget(self._mads_view))
-    self._lane_change_btn.set_click_callback(lambda: gui_app.push_widget(self._lc_view))
-    self._blinker_settings_btn.set_click_callback(lambda: gui_app.push_widget(self._blinker_view))
-    self._torque_settings_btn.set_click_callback(lambda: gui_app.push_widget(self._tq_view))
-    self._tq_self_tune_btn.set_click_callback(lambda: gui_app.push_widget(self._tq_self_tune_view))
-    self._tq_custom_btn.set_click_callback(lambda: gui_app.push_widget(self._tq_custom_view))
+    self._mads_view = self._mads_settings_btn.link_sub_panel([self._mads_toggle, self._mads_main_cruise, self._mads_unified, self._mads_steering])
+    self._lc_view = self._lane_change_btn.link_sub_panel([self._lc_timer, self._lc_bsm])
+    self._blinker_view = self._blinker_settings_btn.link_sub_panel([self._blinker_toggle, self._blinker_speed, self._blinker_delay])
+    self._tq_view = self._torque_settings_btn.link_sub_panel(self._tq_items)
+    self._tq_self_tune_view = self._tq_self_tune_btn.link_sub_panel([self._tq_self_tune, self._tq_relaxed])
+    self._tq_custom_view = self._tq_custom_btn.link_sub_panel([self._tq_custom, self._tq_manual_rt, self._tq_lat_accel, self._tq_friction])
 
   # --- State gating ---
   def _update_state(self):
@@ -191,7 +188,7 @@ class SteeringLayoutMici(NavScroller):
     else:
       cruise = _bb(ui_state.params.get_bool("MadsMainCruiseAllowed"))
       unified = _bb(ui_state.params.get_bool("MadsUnifiedEngagementMode"))
-      steer_idx = ui_state.params.get("MadsSteeringMode") or 0
+      steer_idx = ui_state.params.get("MadsSteeringMode", return_default=True) or 0
       steer_mode = MADS_STEERING_MODE_LABELS[min(steer_idx, len(MADS_STEERING_MODE_LABELS) - 1)]
       self._mads_settings_btn.set_badges([
         ("enabled", "on"),
@@ -252,6 +249,7 @@ class SteeringLayoutMici(NavScroller):
     offroad = ui_state.is_offroad()
     self._mads_toggle.set_enabled(offroad)
 
+    # When car doesn't support full MADS, force safe defaults and lock sub-settings
     is_mads_limited = mads_limited_settings(ui_state)
     if is_mads_limited:
       if self._prev_mads_limited is not True:
@@ -282,8 +280,8 @@ class SteeringLayoutMici(NavScroller):
     self._blinker_speed.refresh()
     self._blinker_delay.refresh()
 
-    self._blinker_speed.set_enabled(lambda: self._blinker_toggle.is_checked)
-    self._blinker_delay.set_enabled(lambda: self._blinker_toggle.is_checked)
+    self._blinker_speed.set_enabled(lambda: self._blinker_toggle._checked)
+    self._blinker_delay.set_enabled(lambda: self._blinker_toggle._checked)
 
   def _update_torque_state(self, torque_allowed: bool):
     self._torque_toggle.refresh()
@@ -330,19 +328,18 @@ class SteeringLayoutMici(NavScroller):
         ("lat", str(lat_val)),
       ])
 
-    # Self-tune sub-panel state — use lambda so enabled evaluates at render time
-    # (after the toggle processes the tap in the same frame)
+    # Sub-panel state — lambda enables same-frame toggle responsiveness (see button.py docstring)
     self._tq_self_tune.refresh()
     self._tq_relaxed.refresh()
     self._tq_self_tune.set_enabled(offroad)
-    self._tq_relaxed.set_enabled(lambda: self._tq_self_tune.is_checked)
+    self._tq_relaxed.set_enabled(lambda: self._tq_self_tune._checked)
 
-    # Custom tuning sub-panel state — same lambda pattern
+    # Custom tuning sub-panel
     self._tq_custom.refresh()
     self._tq_manual_rt.refresh()
     self._tq_lat_accel.refresh()
     self._tq_friction.refresh()
     self._tq_custom.set_enabled(offroad)
-    self._tq_manual_rt.set_enabled(lambda: self._tq_custom.is_checked)
-    self._tq_lat_accel.set_enabled(lambda: self._tq_custom.is_checked)
-    self._tq_friction.set_enabled(lambda: self._tq_custom.is_checked)
+    self._tq_manual_rt.set_enabled(lambda: self._tq_custom._checked)
+    self._tq_lat_accel.set_enabled(lambda: self._tq_custom._checked)
+    self._tq_friction.set_enabled(lambda: self._tq_custom._checked)

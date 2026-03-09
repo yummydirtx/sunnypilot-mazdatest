@@ -163,6 +163,7 @@ class NumberPickerScreen(Widget):
     assert step > 0, "step must be positive"
     self._params = Params()
     self._last_center_value: int | None = None
+    self._was_settled = True
 
     # Build picker items
     self._picker_items: list[PickerItem] = []
@@ -254,13 +255,10 @@ class NumberPickerScreen(Widget):
 
   def _update_state(self):
     super()._update_state()
-    # Only commit while scroll is settled — during AUTO_SCROLL or
-    # MANUAL_SCROLL the offset is in flux and can transiently indicate
-    # the wrong item, causing off-by-one writes. hide_event() handles
-    # the case where the picker is dismissed mid-animation.
-    if self._scroll_panel.state != ScrollState.STEADY:
-      return
-    self._commit_value()
+    settled = self._scroll_panel.state == ScrollState.STEADY
+    if settled and not self._was_settled:
+      self._commit_value()
+    self._was_settled = settled
 
   def _render(self, rect):
     # Title

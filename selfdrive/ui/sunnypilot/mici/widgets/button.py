@@ -40,7 +40,7 @@ except ImportError:
   Params = None
 
 BADGE_GREEN_BG = rl.Color(51, 171, 76, 50)
-BADGE_GREEN_FG = rl.Color(140, 210, 150, 200)
+BADGE_GREEN_FG = rl.Color(100, 180, 120, 220)
 CARD_ACTIVE_TINT = rl.Color(140, 230, 150, 255)
 
 
@@ -81,12 +81,12 @@ class _BadgeMixin:
   def _draw_badges(self, rect: rl.Rectangle):
     """Render cached badge labels as outlined pill chips in a uniform-width flow layout."""
     font = gui_app.font(FontWeight.BOLD)
-    font_size = 26
+    font_size = 28
     h_pad = 10
     gap = 8
     alpha_mult = 1.0 if self._active else 0.3
     border_color = rl.Color(BADGE_GREEN_FG.r, BADGE_GREEN_FG.g, BADGE_GREEN_FG.b, int(BADGE_GREEN_FG.a * 0.4 * alpha_mult))
-    text_color = rl.Color(BADGE_GREEN_FG.r, BADGE_GREEN_FG.g, BADGE_GREEN_FG.b, int(BADGE_GREEN_FG.a * alpha_mult))
+    text_color = rl.Color(130, 200, 145, int(230 * alpha_mult))
 
     assert self._badge_labels is not None
     specs = []
@@ -174,7 +174,7 @@ class BigButtonSP(_BadgeMixin, BigButton):
       sub_label_rect = rl.Rectangle(label_x, label_y, self._width_hint(), sub_label_height)
       if self._badge_labels:
         # Add top margin so pills don't touch title descenders
-        badge_margin = 4
+        badge_margin = 8
         self._draw_badges(rl.Rectangle(label_x, label_y + badge_margin, self._width_hint(), sub_label_height - badge_margin))
       else:
         self._sub_label.render(sub_label_rect)

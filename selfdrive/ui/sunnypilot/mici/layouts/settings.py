@@ -5,7 +5,7 @@ This file is part of sunnypilot and is licensed under the MIT License.
 See the LICENSE.md file in the root directory for more details.
 """
 from openpilot.selfdrive.ui.mici.layouts.settings import settings as OP
-from openpilot.selfdrive.ui.mici.widgets.button import BigButton
+from openpilot.selfdrive.ui.mici.layouts.settings.settings import SettingsBigButton
 from openpilot.selfdrive.ui.sunnypilot.mici.layouts.cruise import CruiseLayoutMici
 from openpilot.selfdrive.ui.sunnypilot.mici.layouts.display import DisplayLayoutMici
 from openpilot.selfdrive.ui.sunnypilot.mici.layouts.models import ModelsLayoutMici
@@ -35,7 +35,7 @@ class SettingsLayoutSP(OP.SettingsLayout):
     sp_buttons = []
     for label, panel_cls, icon in PANELS:
       panel = panel_cls()
-      btn = BigButton(label, "", icon)
+      btn = SettingsBigButton(label, "", icon)
       btn.set_click_callback(lambda p=panel: gui_app.push_widget(p))
       sp_buttons.append(btn)
 

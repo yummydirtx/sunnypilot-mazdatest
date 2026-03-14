@@ -10,12 +10,14 @@ from cereal import custom
 from openpilot.selfdrive.ui.mici.widgets.button import BigButton
 from openpilot.selfdrive.ui.ui_state import ui_state
 from openpilot.system.ui.lib.multilang import tr
-from openpilot.selfdrive.ui.sunnypilot.mici.widgets.scroller import NavScroller
+from openpilot.system.ui.widgets.scroller import NavScroller
 
 
 class ModelsLayoutMici(NavScroller):
-  def __init__(self):
+  def __init__(self, back_callback: Callable):
     super().__init__()
+    self.set_back_callback(back_callback)
+    self.original_back_callback = back_callback
     self.focused_widget = None
 
     self.current_model_btn = BigButton(tr("current model"), "", "")
@@ -40,9 +42,10 @@ class ModelsLayoutMici(NavScroller):
     return folders
 
   def _show_selection_view(self, items, back_callback: Callable):
-    self.clear_widgets()
-    self.add_widgets(items)
-    self.scroll_panel.set_offset(0)
+    self._scroller._items = items
+    for item in items:
+      item.set_touch_valid_callback(lambda: self._scroller.scroll_panel.is_touch_valid() and self._scroller.enabled)
+    self._scroller.scroll_panel.set_offset(0)
     self.set_back_callback(back_callback)
 
   def _show_folders(self):
@@ -81,9 +84,8 @@ class ModelsLayoutMici(NavScroller):
     self._show_selection_view(btns, self._show_folders)
 
   def _reset_main_view(self):
-    self.clear_widgets()
-    self.add_widgets(self.main_items)
-    self._back_callback = None
+    self._scroller._items = self.main_items
+    self.set_back_callback(self.original_back_callback)
     if self.focused_widget and self.focused_widget in self.main_items:
       x = self._scroller._pad
       for item in self.main_items:
@@ -92,11 +94,11 @@ class ModelsLayoutMici(NavScroller):
         if item == self.focused_widget:
           break
         x += item.rect.width + self._scroller._spacing
-      self.scroll_panel.set_offset(0)
+      self._scroller.scroll_panel.set_offset(0)
       self._scroller.scroll_to(x)
       self.focused_widget = None
     else:
-      self.scroll_panel.set_offset(0)
+      self._scroller.scroll_panel.set_offset(0)
 
   def _update_state(self):
     super()._update_state()
@@ -109,3 +111,4 @@ class ModelsLayoutMici(NavScroller):
       self.current_model_btn.set_value(manager.activeBundle.internalName.lower() if manager.activeBundle else tr("default model"))
       self.cancel_download_btn.set_visible(False)
     self.current_model_btn.set_enabled(ui_state.is_offroad())
+    self.current_model_btn.set_text(tr("current model"))

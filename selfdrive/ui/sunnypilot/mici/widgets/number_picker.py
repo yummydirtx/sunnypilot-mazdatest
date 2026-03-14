@@ -1,4 +1,3 @@
-import numpy as np
 import pyray as rl
 from collections.abc import Callable
 
@@ -6,7 +5,29 @@ from openpilot.system.ui.lib.application import gui_app, FontWeight, MousePos
 from openpilot.system.ui.lib.scroll_panel2 import ScrollState
 from openpilot.system.ui.lib.text_measure import measure_text_cached
 from openpilot.system.ui.widgets import Widget
-from openpilot.system.ui.widgets.scroller import _Scroller
+from openpilot.system.ui.widgets.scroller import _Scroller as _BaseScroller
+
+
+class _Scroller(_BaseScroller):
+  """_Scroller with snap_ready guard — skips snap for one frame after show_event
+  so items can be laid out at the correct offset before snap reads their positions."""
+
+  def __init__(self, *args, **kwargs):
+    super().__init__(*args, **kwargs)
+    self._snap_ready = False
+
+  def show_event(self):
+    super().show_event()
+    self._snap_ready = False
+
+  def _get_scroll(self, visible_items, content_size):
+    if self._snap_items and not self._snap_ready:
+      # First layout after show — item positions are stale, skip snap correction
+      self._snap_ready = True
+      self._scroll_snap_filter.x = 0
+      self.scroll_panel.update(self._rect, content_size)
+      return self.scroll_panel.get_offset()
+    return super()._get_scroll(visible_items, content_size)
 
 try:
   from openpilot.common.params import Params
@@ -25,24 +46,20 @@ BAND_COLOR = rl.Color(255, 255, 255, int(255 * 0.25))
 BAND_TOP = CAROUSEL_TOP + 14
 BAND_FADE_LEN = 40
 
-# Font sizes and alphas for distance tiers
-CENTER_FONT_SIZE = 56
-CENTER_ALPHA = 0.9
-ADJ_FONT_SIZE = 40
-ADJ_ALPHA = 0.4
-FAR_FONT_SIZE = 32
-FAR_ALPHA = 0.2
-EDGE_FONT_SIZE = 28
-EDGE_ALPHA = 0.1
+
+def _lerp(dist, tiers, values):
+  """Piecewise linear interpolation for small tier arrays."""
+  i = min(int(dist), len(tiers) - 2)
+  t = max(0.0, min(1.0, dist - tiers[i]))
+  return values[i] + (values[i + 1] - values[i]) * t
 
 
 class PickerItem(Widget):
   """A lightweight label widget for a single picker value."""
 
-  # Distance breakpoints and corresponding visual values for np.interp
   _DIST_TIERS = [0, 1, 2, 3]
-  _FONT_SIZES = [CENTER_FONT_SIZE, ADJ_FONT_SIZE, FAR_FONT_SIZE, EDGE_FONT_SIZE]
-  _ALPHAS = [CENTER_ALPHA, ADJ_ALPHA, FAR_ALPHA, EDGE_ALPHA]
+  _FONT_SIZES = [56, 40, 32, 28]   # center, adjacent, far, edge
+  _ALPHAS = [0.9, 0.4, 0.2, 0.1]
 
   def __init__(self, raw_value: int, display_label: str, on_tap: Callable[[int], None] | None = None,
                item_width: int = ITEM_WIDTH):
@@ -69,8 +86,8 @@ class PickerItem(Widget):
     dist = abs(item_center_x - parent_center_x) / self._item_width
 
     # Continuous interpolation of font size, alpha, and weight based on distance
-    font_size = int(np.interp(dist, self._DIST_TIERS, self._FONT_SIZES))
-    alpha = float(np.interp(dist, self._DIST_TIERS, self._ALPHAS))
+    font_size = int(_lerp(dist, self._DIST_TIERS, self._FONT_SIZES))
+    alpha = _lerp(dist, self._DIST_TIERS, self._ALPHAS)
     font_weight = FontWeight.BOLD if dist < 0.5 else FontWeight.ROMAN
 
     font = gui_app.font(font_weight)
@@ -153,10 +170,6 @@ class NumberPickerScreen(Widget):
     self._title = title
     self._param = param
     self._min_value = min_value
-    self._max_value = max_value
-    self._step = step
-    self._label_callback = label_callback
-    self._value_map = value_map
     self._float_param = float_param
     self._unit = unit
     self._item_width = item_width
@@ -165,13 +178,13 @@ class NumberPickerScreen(Widget):
     self._last_center_value: int | None = None
     self._was_settled = True
 
-    # Build picker items
+    # Build picker items — label_callback and value_map only needed during construction
     self._picker_items: list[PickerItem] = []
     val = min_value
     while val <= max_value:
-      display = self._make_label(val)
-      item = PickerItem(val, display, on_tap=self._on_item_tap, item_width=item_width)
-      self._picker_items.append(item)
+      display_val = value_map[val] if value_map and val in value_map else val
+      display = label_callback(display_val) if label_callback else str(display_val)
+      self._picker_items.append(PickerItem(val, display, on_tap=self._on_item_tap, item_width=item_width))
       val += step
 
     # Horizontal scroller with snap, centered padding
@@ -189,23 +202,21 @@ class NumberPickerScreen(Widget):
 
     self.set_rect(rl.Rectangle(0, 0, SCREEN_WIDTH, TITLE_HEIGHT + CAROUSEL_HEIGHT))
 
-  def _make_label(self, raw_value: int) -> str:
-    display_val = raw_value
-    if self._value_map and raw_value in self._value_map:
-      display_val = self._value_map[raw_value]
-    if self._label_callback:
-      return self._label_callback(display_val)
-    return str(display_val)
-
   @property
   def _scroll_panel(self):
     return self._scroller.scroll_panel
 
   def _center_index(self) -> int:
-    """Compute center item index from scroll offset (independent of layout timing)."""
-    offset = self._scroll_panel.get_offset()
-    idx = int(-offset / self._item_width + 0.5)
-    return max(0, min(idx, len(self._picker_items) - 1))
+    """Find which item is between the selection bars using actual layout positions."""
+    center_x = self._scroller._rect.x + self._scroller._rect.width / 2
+    closest_idx = 0
+    closest_dist = float('inf')
+    for idx, item in enumerate(self._picker_items):
+      dist = abs(item.rect.x + item.rect.width / 2 - center_x)
+      if dist < closest_dist:
+        closest_dist = dist
+        closest_idx = idx
+    return closest_idx
 
   def _scroll_to_index(self, idx: int):
     """Scroll so item at idx is centered."""
@@ -247,11 +258,6 @@ class NumberPickerScreen(Widget):
   def hide_event(self):
     super().hide_event()
     self._scroller.hide_event()
-    # Snap offset to nearest item boundary so _center_index() returns the
-    # correct item even if the snap animation hasn't fully converged yet.
-    offset = self._scroll_panel.get_offset()
-    self._scroll_panel.set_offset(round(offset / self._item_width) * self._item_width)
-    self._commit_value()
 
   def _update_state(self):
     super()._update_state()

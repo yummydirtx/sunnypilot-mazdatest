@@ -10,28 +10,23 @@ from openpilot.selfdrive.ui.sunnypilot.mici.widgets.button import (
   BigButtonSP,
   BigMultiParamToggleSP,
   BigParamOption,
+  speed_unit,
 )
 from openpilot.selfdrive.ui.sunnypilot.mici.widgets.scroller import NavScroller
 from openpilot.selfdrive.ui.ui_state import ui_state
+from openpilot.system.ui.lib.application import gui_app
 
 SL_MODE_LABELS = ["off", "info", "warn", "assist"]
 SL_SOURCE_LABELS = ["car", "map", "car-first", "map-first", "combined"]
 ACC_LONG_PRESS_MAP = {1: 1, 2: 5, 3: 10}
 
 
-def _speed_unit():
-  return "km/h" if ui_state.is_metric else "mph"
-
-
-# ---------------------------------------------------------------------------
-# Speed Limit sub-panel items
-# ---------------------------------------------------------------------------
 def _offset_unit():
   t = int(ui_state.params.get("SpeedLimitOffsetType", return_default=True))
   if t == 2:
     return "%"
   if t == 1:
-    return _speed_unit()
+    return speed_unit()
   return ""
 
 
@@ -40,65 +35,6 @@ def _offset_label(value):
   return f"{value}{unit}" if unit else "none"
 
 
-def _build_speed_limit_items():
-  mode = BigMultiParamToggleSP(
-    "speed limit mode",
-    "SpeedLimitMode",
-    SL_MODE_LABELS,
-  )
-  source = BigMultiParamToggleSP(
-    "source",
-    "SpeedLimitPolicy",
-    SL_SOURCE_LABELS,
-  )
-  offset_type = BigMultiParamToggleSP(
-    "offset type",
-    "SpeedLimitOffsetType",
-    ["none", "fixed", "%"],
-  )
-
-  offset_value = BigParamOption(
-    "offset value",
-    "SpeedLimitValueOffset",
-    min_value=-30,
-    max_value=30,
-    label_callback=_offset_label,
-    picker_unit=_offset_unit,
-  )
-  return mode, source, offset_type, offset_value
-
-
-# ---------------------------------------------------------------------------
-# Custom ACC sub-panel items
-# ---------------------------------------------------------------------------
-def _build_custom_acc_items():
-  toggle = BigParamControl("enable custom increments", "CustomAccIncrementsEnabled")
-
-  def _speed_label(v):
-    return f"{v} {_speed_unit()}"
-  short_press = BigParamOption(
-    "short press",
-    "CustomAccShortPressIncrement",
-    min_value=1,
-    max_value=10,
-    label_callback=_speed_label,
-    picker_unit=_speed_unit,
-  )
-  long_press = BigParamOption(
-    "long press",
-    "CustomAccLongPressIncrement",
-    min_value=1,
-    max_value=3,
-    value_map=ACC_LONG_PRESS_MAP,
-    label_callback=_speed_label,
-    picker_unit=_speed_unit,
-  )
-  return toggle, short_press, long_press
-
-
-# ===========================================================================
-# Main Cruise Layout
-# ===========================================================================
 class CruiseLayoutMici(NavScroller):
   """Cruise settings: ICBM, DEC, SCC, custom ACC increments, speed limit assist.
 
@@ -112,7 +48,6 @@ class CruiseLayoutMici(NavScroller):
   def __init__(self):
     super().__init__()
 
-    # Transition tracking — None means first frame (triggers cleanup like False→False would)
     self._prev_icbm_available: bool | None = None
     self._prev_has_long_or_icbm: bool | None = None
     self._prev_sla_available: bool | None = None
@@ -128,28 +63,33 @@ class CruiseLayoutMici(NavScroller):
     for btn in [self._custom_acc_btn, self._speed_limit_btn]:
       btn.set_subtitle_font_size(24)
 
-    self._scroller.add_widgets(
-      [
-        self._icbm_toggle,
-        self._dec_toggle,
-        self._scc_v_toggle,
-        self._scc_m_toggle,
-        self._custom_acc_btn,
-        self._speed_limit_btn,
-      ]
-    )
+    self._scroller.add_widgets([
+      self._icbm_toggle, self._dec_toggle,
+      self._scc_v_toggle, self._scc_m_toggle,
+      self._custom_acc_btn, self._speed_limit_btn,
+    ])
 
     # --- Custom ACC sub-panel ---
-    self._custom_acc_toggle, self._acc_short, self._acc_long = _build_custom_acc_items()
+    self._custom_acc_toggle = BigParamControl("enable custom increments", "CustomAccIncrementsEnabled")
+
+    def _speed_label(v):
+      return f"{v} {speed_unit()}"
+    self._acc_short = BigParamOption("short press", "CustomAccShortPressIncrement",
+                                     min_value=1, max_value=10, label_callback=_speed_label, picker_unit=speed_unit)
+    self._acc_long = BigParamOption("long press", "CustomAccLongPressIncrement",
+                                    min_value=1, max_value=3, value_map=ACC_LONG_PRESS_MAP,
+                                    label_callback=_speed_label, picker_unit=speed_unit)
+    self._acc_view = self._custom_acc_btn.link_sub_panel([self._custom_acc_toggle, self._acc_short, self._acc_long])
 
     # --- Speed limit sub-panel ---
-    self._sl_mode, self._sl_source, self._sl_offset_type, self._sl_offset_value = _build_speed_limit_items()
-
-    # Pre-build sub-view NavScrollers
-    self._acc_view = self._custom_acc_btn.link_sub_panel([self._custom_acc_toggle, self._acc_short, self._acc_long])
+    self._sl_mode = BigMultiParamToggleSP("speed limit mode", "SpeedLimitMode", SL_MODE_LABELS)
+    self._sl_source = BigMultiParamToggleSP("source", "SpeedLimitPolicy", SL_SOURCE_LABELS)
+    self._sl_offset_type = BigMultiParamToggleSP("offset type", "SpeedLimitOffsetType", ["none", "fixed", "%"])
+    self._sl_offset_value = BigParamOption("offset value", "SpeedLimitValueOffset",
+                                           min_value=-30, max_value=30, label_callback=_offset_label, picker_unit=_offset_unit)
     self._sl_view = self._speed_limit_btn.link_sub_panel([self._sl_mode, self._sl_source, self._sl_offset_type, self._sl_offset_value])
 
-  # --- State gating ---
+  # --- Main view state ---
   def _update_state(self):
     super()._update_state()
 
@@ -189,53 +129,48 @@ class CruiseLayoutMici(NavScroller):
     if not acc_on:
       self._custom_acc_btn.set_value("off")
     else:
-      unit = _speed_unit()
+      unit = speed_unit()
       short_val = ui_state.params.get("CustomAccShortPressIncrement", return_default=True) or 1
       long_raw = ui_state.params.get("CustomAccLongPressIncrement", return_default=True) or 1
       long_val = ACC_LONG_PRESS_MAP.get(long_raw, long_raw)
-      self._custom_acc_btn.set_badges(
-        [
-          (f"{short_val}{unit}", "on"),
-          (f"{long_val}{unit}", "on"),
-        ]
-      )
+      self._custom_acc_btn.set_badges([(f"{short_val}{unit}", "on"), (f"{long_val}{unit}", "on")])
 
     # Speed limit button subtitle
     sl_mode_idx = ui_state.params.get("SpeedLimitMode", return_default=True) or 0
     sl_mode = SL_MODE_LABELS[min(sl_mode_idx, len(SL_MODE_LABELS) - 1)]
+    offset_type = ui_state.params.get("SpeedLimitOffsetType", return_default=True)
     if sl_mode == "off":
       self._speed_limit_btn.set_value("off")
     else:
       sl_source_idx = ui_state.params.get("SpeedLimitPolicy", return_default=True) or 0
       sl_source = SL_SOURCE_LABELS[min(sl_source_idx, len(SL_SOURCE_LABELS) - 1)]
       sl_offset_val = ui_state.params.get("SpeedLimitValueOffset", return_default=True) or 0
-      unit = _offset_unit()
+      unit = "%" if offset_type == 2 else (speed_unit() if offset_type == 1 else "")
       badges = [(sl_mode, "on"), (sl_source, "on")]
       if unit:
         sign = "+" if sl_offset_val > 0 else ""
         badges.append((f"{sign}{sl_offset_val}{unit}", "on"))
       self._speed_limit_btn.set_badges(badges)
 
-    # Sub-panel state
+    # --- Sub-panel state (skipped when not visible) ---
     self._update_custom_acc_state()
-    self._update_speed_limit_state(cp_ready, has_long, has_icbm)
+    self._update_speed_limit_state(cp_ready, has_long, has_icbm, offset_type)
 
+  # --- Custom ACC sub-panel ---
   def _update_custom_acc_state(self):
+    if not gui_app.widget_in_stack(self._acc_view):
+      return
     self._custom_acc_toggle.refresh()
     self._acc_short.refresh()
     self._acc_long.refresh()
-
     self._custom_acc_toggle.set_enabled(self._custom_acc_btn.enabled)
     # Lambda: short/long respond same-frame when toggle is tapped (see button.py docstring)
     self._acc_short.set_enabled(lambda: self._custom_acc_btn.enabled and self._custom_acc_toggle._checked)
     self._acc_long.set_enabled(lambda: self._custom_acc_btn.enabled and self._custom_acc_toggle._checked)
 
-  def _update_speed_limit_state(self, cp_ready: bool, has_long: bool, has_icbm: bool):
-    self._sl_mode.refresh()
-    self._sl_source.refresh()
-    self._sl_offset_type.refresh()
-
-    # SLA availability gating — "assist" mode requires specific conditions
+  # --- Speed limit sub-panel ---
+  def _update_speed_limit_state(self, cp_ready: bool, has_long: bool, has_icbm: bool, offset_type: int):
+    # SLA availability gating (must always run)
     sla_available = False
     if cp_ready:
       brand = ui_state.CP.brand
@@ -248,13 +183,15 @@ class CruiseLayoutMici(NavScroller):
       sl_mode_idx = ui_state.params.get("SpeedLimitMode", return_default=True) or 0
       if sl_mode_idx == SL_MODE_LABELS.index("assist"):
         ui_state.params.put("SpeedLimitMode", SL_MODE_LABELS.index("warn"))
-        self._sl_mode.refresh()
     self._prev_sla_available = sla_available
 
+    if not gui_app.widget_in_stack(self._sl_view):
+      return
+    self._sl_mode.refresh()
+    self._sl_source.refresh()
+    self._sl_offset_type.refresh()
     self._sl_mode.set_enabled(True)
     self._sl_source.set_enabled(True)
     self._sl_offset_type.set_enabled(True)
-
-    offset_type = ui_state.params.get("SpeedLimitOffsetType", return_default=True)
     self._sl_offset_value.set_enabled(offset_type != 0)  # 0 = off/none
     self._sl_offset_value.refresh()

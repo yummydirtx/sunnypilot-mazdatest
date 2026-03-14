@@ -162,9 +162,10 @@ def capture_picker(option, filename):
 
   picker = option.create_picker_screen()
   view = NavScroller()
+  view._scroller._show_scroll_indicator = False
+  view._scroller._pad = 0
   view.add_widgets([picker])
   view.set_scrolling_enabled(False)
-  view._scroller._show_scroll_indicator = False
   view.show_event()
   capture(view, filename)
 

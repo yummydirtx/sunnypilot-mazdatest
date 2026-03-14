@@ -17,24 +17,24 @@ from openpilot.system.ui.lib.application import gui_app
 
 SP_ICON = "../../sunnypilot/selfdrive/assets/offroad"
 
-PANELS = [
-  ("sunnylink", SunnylinkLayoutMici, "icons_mici/settings/developer/ssh.png"),
-  ("models",    ModelsLayoutMici,    f"{SP_ICON}/icon_models.png"),
-  ("cruise",    CruiseLayoutMici,    f"{SP_ICON}/icon_vehicle.png"),
-  ("steering",  SteeringLayoutMici,  f"{SP_ICON}/icon_lateral.png"),
-  ("display",   DisplayLayoutMici,   f"{SP_ICON}/icon_display.png"),
-  ("visuals",   VisualsLayoutMici,   f"{SP_ICON}/icon_visuals.png"),
-  ("trips",     TripsLayoutMici,     f"{SP_ICON}/icon_trips.png"),
-]
-
 
 class SettingsLayoutSP(OP.SettingsLayout):
   def __init__(self):
     OP.SettingsLayout.__init__(self)
 
+    panels = [
+      ("sunnylink", SunnylinkLayoutMici, gui_app.texture("icons_mici/settings/developer/ssh.png", 56, 64)),
+      ("models",    ModelsLayoutMici,    gui_app.texture(f"{SP_ICON}/icon_models.png", 64, 64)),
+      ("cruise",    CruiseLayoutMici,    gui_app.texture(f"{SP_ICON}/icon_vehicle.png", 64, 64)),
+      ("steering",  SteeringLayoutMici,  gui_app.texture(f"{SP_ICON}/icon_lateral.png", 64, 64)),
+      ("display",   DisplayLayoutMici,   gui_app.texture(f"{SP_ICON}/icon_display.png", 64, 64)),
+      ("visuals",   VisualsLayoutMici,   gui_app.texture(f"{SP_ICON}/icon_visuals.png", 64, 64)),
+      ("trips",     TripsLayoutMici,     gui_app.texture(f"{SP_ICON}/icon_trips.png", 64, 64)),
+    ]
+
     sp_buttons = []
-    for label, panel_cls, icon in PANELS:
-      panel = panel_cls()
+    for label, panel_cls, icon in panels:
+      panel = panel_cls(back_callback=gui_app.pop_widget) if panel_cls in (SunnylinkLayoutMici, ModelsLayoutMici) else panel_cls()
       btn = SettingsBigButton(label, "", icon)
       btn.set_click_callback(lambda p=panel: gui_app.push_widget(p))
       sp_buttons.append(btn)

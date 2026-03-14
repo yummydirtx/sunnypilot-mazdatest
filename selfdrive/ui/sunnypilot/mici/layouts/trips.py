@@ -72,9 +72,7 @@ class TripsLayoutMici(NavScroller):
       identity_token = get_token(dongle_id)
       response = api_get(f"v1.1/devices/{dongle_id}/stats", access_token=identity_token, session=self._session)
       if response.status_code == 200:
-        data = response.json()
-        self._stats = data
-        self._params.put(self.PARAM_KEY, data)
+        self._params.put(self.PARAM_KEY, response.json())
     except Exception as e:
       cloudlog.error(f"Failed to fetch drive stats: {e}")
 

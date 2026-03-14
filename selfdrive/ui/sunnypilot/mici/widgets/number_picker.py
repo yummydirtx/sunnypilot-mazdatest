@@ -207,10 +207,16 @@ class NumberPickerScreen(Widget):
     return self._scroller.scroll_panel
 
   def _center_index(self) -> int:
-    """Compute center item index from scroll offset (independent of layout timing)."""
-    offset = self._scroll_panel.get_offset()
-    idx = int(-offset / self._item_width + 0.5)
-    return max(0, min(idx, len(self._picker_items) - 1))
+    """Find which item is between the selection bars using actual layout positions."""
+    center_x = self._scroller._rect.x + self._scroller._rect.width / 2
+    closest_idx = 0
+    closest_dist = float('inf')
+    for idx, item in enumerate(self._picker_items):
+      dist = abs(item.rect.x + item.rect.width / 2 - center_x)
+      if dist < closest_dist:
+        closest_dist = dist
+        closest_idx = idx
+    return closest_idx
 
   def _scroll_to_index(self, idx: int):
     """Scroll so item at idx is centered."""
@@ -252,11 +258,6 @@ class NumberPickerScreen(Widget):
   def hide_event(self):
     super().hide_event()
     self._scroller.hide_event()
-    # Snap offset to nearest item boundary so _center_index() returns the
-    # correct item even if the snap animation hasn't fully converged yet.
-    offset = self._scroll_panel.get_offset()
-    self._scroll_panel.set_offset(round(offset / self._item_width) * self._item_width)
-    self._commit_value()
 
   def _update_state(self):
     super()._update_state()

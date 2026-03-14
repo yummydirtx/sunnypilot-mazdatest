@@ -65,6 +65,7 @@ cppcheck_report.txt
 comma*.sh
 
 selfdrive/modeld/models/*.pkl*
+selfdrive/ui/tests/screenshots/
 sunnypilot/modeld*/models/*.pkl
 
 # openpilot log files

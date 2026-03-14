@@ -89,6 +89,7 @@ class CruiseLayoutMici(NavScroller):
                                            min_value=-30, max_value=30, label_callback=_offset_label, picker_unit=_offset_unit)
     self._sl_view = self._speed_limit_btn.link_sub_panel([self._sl_mode, self._sl_source, self._sl_offset_type, self._sl_offset_value])
 
+  # --- Main view state ---
   def _update_state(self):
     super()._update_state()
 
@@ -151,10 +152,11 @@ class CruiseLayoutMici(NavScroller):
         badges.append((f"{sign}{sl_offset_val}{unit}", "on"))
       self._speed_limit_btn.set_badges(badges)
 
-    # Sub-panel state
+    # --- Sub-panel state (skipped when not visible) ---
     self._update_custom_acc_state()
     self._update_speed_limit_state(cp_ready, has_long, has_icbm, offset_type)
 
+  # --- Custom ACC sub-panel ---
   def _update_custom_acc_state(self):
     if not gui_app.widget_in_stack(self._acc_view):
       return
@@ -166,6 +168,7 @@ class CruiseLayoutMici(NavScroller):
     self._acc_short.set_enabled(lambda: self._custom_acc_btn.enabled and self._custom_acc_toggle._checked)
     self._acc_long.set_enabled(lambda: self._custom_acc_btn.enabled and self._custom_acc_toggle._checked)
 
+  # --- Speed limit sub-panel ---
   def _update_speed_limit_state(self, cp_ready: bool, has_long: bool, has_icbm: bool, offset_type: int):
     # SLA availability gating (must always run)
     sla_available = False

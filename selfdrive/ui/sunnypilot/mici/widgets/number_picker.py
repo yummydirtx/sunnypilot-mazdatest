@@ -5,7 +5,29 @@ from openpilot.system.ui.lib.application import gui_app, FontWeight, MousePos
 from openpilot.system.ui.lib.scroll_panel2 import ScrollState
 from openpilot.system.ui.lib.text_measure import measure_text_cached
 from openpilot.system.ui.widgets import Widget
-from openpilot.system.ui.widgets.scroller import _Scroller
+from openpilot.system.ui.widgets.scroller import _Scroller as _BaseScroller
+
+
+class _Scroller(_BaseScroller):
+  """_Scroller with snap_ready guard — skips snap for one frame after show_event
+  so items can be laid out at the correct offset before snap reads their positions."""
+
+  def __init__(self, *args, **kwargs):
+    super().__init__(*args, **kwargs)
+    self._snap_ready = False
+
+  def show_event(self):
+    super().show_event()
+    self._snap_ready = False
+
+  def _get_scroll(self, visible_items, content_size):
+    if self._snap_items and not self._snap_ready:
+      # First layout after show — item positions are stale, skip snap correction
+      self._snap_ready = True
+      self._scroll_snap_filter.x = 0
+      self.scroll_panel.update(self._rect, content_size)
+      return self.scroll_panel.get_offset()
+    return super()._get_scroll(visible_items, content_size)
 
 try:
   from openpilot.common.params import Params

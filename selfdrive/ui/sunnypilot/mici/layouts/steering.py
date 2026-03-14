@@ -102,6 +102,7 @@ class SteeringLayoutMici(NavScroller):
     self._tq_items_rest = [self._tq_self_tune_btn, self._tq_custom_btn]
     self._tq_view = self._torque_settings_btn.link_sub_panel([self._torque_toggle] + self._tq_items_rest)
 
+  # --- Main view state ---
   def _update_state(self):
     super()._update_state()
 
@@ -152,12 +153,13 @@ class SteeringLayoutMici(NavScroller):
       self._torque_settings_btn.set_badges([("enabled", "on"), ("self-tune", _on_off(self_tune_on)), ("custom-tuning", _on_off(custom_on))])
     self._nnlc_toggle.set_enabled(torque_allowed and offroad and not enforce_torque)
 
-    # --- Sub-panel state ---
+    # --- Sub-panel state (skipped when not visible) ---
     self._update_mads_state()
     self._update_lane_change_state()
     self._update_blinker_state()
     self._update_torque_state(torque_allowed, enforce_torque, self_tune_on, custom_on)
 
+  # --- MADS sub-panel ---
   def _update_mads_state(self):
     # Transition tracking — force safe defaults for MADS-limited brands (rivian, tesla w/o vehicle bus)
     is_mads_limited = ui_state.CP is not None and ui_state.CP_SP is not None and get_mads_limited_brands(ui_state.CP, ui_state.CP_SP)
@@ -185,6 +187,7 @@ class SteeringLayoutMici(NavScroller):
       self._mads_unified.set_enabled(mads_on)
       self._mads_steering.set_enabled(mads_on)
 
+  # --- Lane change sub-panel ---
   def _update_lane_change_state(self):
     if not gui_app.widget_in_stack(self._lc_view):
       return
@@ -192,6 +195,7 @@ class SteeringLayoutMici(NavScroller):
     self._lc_bsm.refresh()
     self._lc_bsm.set_enabled(ui_state.CP is not None and ui_state.CP.enableBsm)
 
+  # --- Blinker sub-panel ---
   def _update_blinker_state(self):
     if not gui_app.widget_in_stack(self._blinker_view):
       return
@@ -201,6 +205,7 @@ class SteeringLayoutMici(NavScroller):
     self._blinker_speed.set_enabled(lambda: self._blinker_toggle._checked)
     self._blinker_delay.set_enabled(lambda: self._blinker_toggle._checked)
 
+  # --- Torque sub-panel ---
   def _update_torque_state(self, torque_allowed: bool, enforce_torque: bool, self_tune_on: bool, custom_on: bool):
     if not self_tune_on and self._prev_self_tune_on is not False:
       ui_state.params.remove("LiveTorqueParamsRelaxedToggle")

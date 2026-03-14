@@ -10,14 +10,12 @@ from cereal import custom
 from openpilot.selfdrive.ui.mici.widgets.button import BigButton
 from openpilot.selfdrive.ui.ui_state import ui_state
 from openpilot.system.ui.lib.multilang import tr
-from openpilot.system.ui.widgets.scroller import NavScroller
+from openpilot.selfdrive.ui.sunnypilot.mici.widgets.scroller import NavScroller
 
 
 class ModelsLayoutMici(NavScroller):
-  def __init__(self, back_callback: Callable):
+  def __init__(self):
     super().__init__()
-    self.set_back_callback(back_callback)
-    self.original_back_callback = back_callback
     self.focused_widget = None
 
     self.current_model_btn = BigButton(tr("current model"), "", "")
@@ -85,7 +83,7 @@ class ModelsLayoutMici(NavScroller):
 
   def _reset_main_view(self):
     self._scroller._items = self.main_items
-    self.set_back_callback(self.original_back_callback)
+    self._back_callback = None
     if self.focused_widget and self.focused_widget in self.main_items:
       x = self._scroller._pad
       for item in self.main_items:

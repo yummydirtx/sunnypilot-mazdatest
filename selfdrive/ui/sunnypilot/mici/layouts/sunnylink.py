@@ -199,7 +199,7 @@ class SunnylinkPairBigButton(BigButton):
       dlg = BigDialog(tr("sunnylink Dongle ID not found. Please reboot & try again."), "")
     elif self.sponsor_pairing:
       dlg = SunnylinkPairingDialog(sponsor_pairing=True)
-    elif not self.sponsor_pairing:
+    else:
       dlg = SunnylinkPairingDialog(sponsor_pairing=False)
     if dlg:
       gui_app.push_widget(dlg)

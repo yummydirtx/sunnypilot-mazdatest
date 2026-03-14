@@ -1,4 +1,3 @@
-import numpy as np
 import pyray as rl
 from collections.abc import Callable
 
@@ -25,24 +24,20 @@ BAND_COLOR = rl.Color(255, 255, 255, int(255 * 0.25))
 BAND_TOP = CAROUSEL_TOP + 14
 BAND_FADE_LEN = 40
 
-# Font sizes and alphas for distance tiers
-CENTER_FONT_SIZE = 56
-CENTER_ALPHA = 0.9
-ADJ_FONT_SIZE = 40
-ADJ_ALPHA = 0.4
-FAR_FONT_SIZE = 32
-FAR_ALPHA = 0.2
-EDGE_FONT_SIZE = 28
-EDGE_ALPHA = 0.1
+
+def _lerp(dist, tiers, values):
+  """Piecewise linear interpolation for small tier arrays."""
+  i = min(int(dist), len(tiers) - 2)
+  t = max(0.0, min(1.0, dist - tiers[i]))
+  return values[i] + (values[i + 1] - values[i]) * t
 
 
 class PickerItem(Widget):
   """A lightweight label widget for a single picker value."""
 
-  # Distance breakpoints and corresponding visual values for np.interp
   _DIST_TIERS = [0, 1, 2, 3]
-  _FONT_SIZES = [CENTER_FONT_SIZE, ADJ_FONT_SIZE, FAR_FONT_SIZE, EDGE_FONT_SIZE]
-  _ALPHAS = [CENTER_ALPHA, ADJ_ALPHA, FAR_ALPHA, EDGE_ALPHA]
+  _FONT_SIZES = [56, 40, 32, 28]   # center, adjacent, far, edge
+  _ALPHAS = [0.9, 0.4, 0.2, 0.1]
 
   def __init__(self, raw_value: int, display_label: str, on_tap: Callable[[int], None] | None = None,
                item_width: int = ITEM_WIDTH):
@@ -69,8 +64,8 @@ class PickerItem(Widget):
     dist = abs(item_center_x - parent_center_x) / self._item_width
 
     # Continuous interpolation of font size, alpha, and weight based on distance
-    font_size = int(np.interp(dist, self._DIST_TIERS, self._FONT_SIZES))
-    alpha = float(np.interp(dist, self._DIST_TIERS, self._ALPHAS))
+    font_size = int(_lerp(dist, self._DIST_TIERS, self._FONT_SIZES))
+    alpha = _lerp(dist, self._DIST_TIERS, self._ALPHAS)
     font_weight = FontWeight.BOLD if dist < 0.5 else FontWeight.ROMAN
 
     font = gui_app.font(font_weight)
@@ -153,10 +148,6 @@ class NumberPickerScreen(Widget):
     self._title = title
     self._param = param
     self._min_value = min_value
-    self._max_value = max_value
-    self._step = step
-    self._label_callback = label_callback
-    self._value_map = value_map
     self._float_param = float_param
     self._unit = unit
     self._item_width = item_width
@@ -165,13 +156,13 @@ class NumberPickerScreen(Widget):
     self._last_center_value: int | None = None
     self._was_settled = True
 
-    # Build picker items
+    # Build picker items — label_callback and value_map only needed during construction
     self._picker_items: list[PickerItem] = []
     val = min_value
     while val <= max_value:
-      display = self._make_label(val)
-      item = PickerItem(val, display, on_tap=self._on_item_tap, item_width=item_width)
-      self._picker_items.append(item)
+      display_val = value_map[val] if value_map and val in value_map else val
+      display = label_callback(display_val) if label_callback else str(display_val)
+      self._picker_items.append(PickerItem(val, display, on_tap=self._on_item_tap, item_width=item_width))
       val += step
 
     # Horizontal scroller with snap, centered padding
@@ -188,14 +179,6 @@ class NumberPickerScreen(Widget):
     self._scroller.set_reset_scroll_at_show(False)
 
     self.set_rect(rl.Rectangle(0, 0, SCREEN_WIDTH, TITLE_HEIGHT + CAROUSEL_HEIGHT))
-
-  def _make_label(self, raw_value: int) -> str:
-    display_val = raw_value
-    if self._value_map and raw_value in self._value_map:
-      display_val = self._value_map[raw_value]
-    if self._label_callback:
-      return self._label_callback(display_val)
-    return str(display_val)
 
   @property
   def _scroll_panel(self):

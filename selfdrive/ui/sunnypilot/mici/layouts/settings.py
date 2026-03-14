@@ -34,7 +34,7 @@ class SettingsLayoutSP(OP.SettingsLayout):
 
     sp_buttons = []
     for label, panel_cls, icon in panels:
-      panel = panel_cls(back_callback=gui_app.pop_widget) if panel_cls in (SunnylinkLayoutMici, ModelsLayoutMici) else panel_cls()
+      panel = panel_cls()
       btn = SettingsBigButton(label, "", icon)
       btn.set_click_callback(lambda p=panel: gui_app.push_widget(p))
       sp_buttons.append(btn)

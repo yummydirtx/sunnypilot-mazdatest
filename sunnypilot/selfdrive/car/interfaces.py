@@ -8,6 +8,7 @@ from typing import Any
 
 from opendbc.car import structs
 from opendbc.car.interfaces import CarInterfaceBase
+from opendbc.car.mazda.values import CAR as MAZDA_CAR, MazdaFlags, MazdaSafetyFlags
 from openpilot.common.params import Params
 from openpilot.common.swaglog import cloudlog
 from openpilot.sunnypilot.selfdrive.controls.lib.nnlc.helpers import get_nn_model_path
@@ -92,10 +93,32 @@ def _cleanup_unsupported_params(CP: structs.CarParams, CP_SP: structs.CarParamsS
   set_speed_limit_assist_availability(CP, CP_SP, params)
 
 
+def _initialize_mazda_debug_longitudinal(CP: structs.CarParams, CP_SP: structs.CarParamsSP, params: Params = None) -> None:
+  if params is None:
+    params = Params()
+
+  if CP.brand != "mazda" or CP.carFingerprint != MAZDA_CAR.MAZDA_CX5_2022:
+    return
+
+  if not params.get_bool("JoystickDebugMode"):
+    return
+
+  CP.flags |= MazdaFlags.DEBUG_LONG.value
+  CP.openpilotLongitudinalControl = True
+  CP.radarUnavailable = True
+  CP.safetyConfigs[0].safetyParam |= MazdaSafetyFlags.LONG_CONTROL.value
+  CP.longitudinalTuning.kpBP = [0.0]
+  CP.longitudinalTuning.kpV = [1.0]
+  CP.longitudinalTuning.kiBP = [0.0]
+  CP.longitudinalTuning.kiV = [0.0]
+  cloudlog.warning("Enabled Mazda CX-5 debug longitudinal for joystick mode")
+
+
 def setup_interfaces(CI: CarInterfaceBase, params: Params = None) -> None:
   CP = CI.CP
   CP_SP = CI.CP_SP
 
+  _initialize_mazda_debug_longitudinal(CP, CP_SP, params)
   enforce_torque = _enforce_torque_lateral_control(CP, params)
   nnlc_enabled = _initialize_neural_network_lateral_control(CP, CP_SP, params)
   _initialize_intelligent_cruise_button_management(CP, CP_SP, params)

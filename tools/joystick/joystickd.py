@@ -4,6 +4,7 @@ import math
 import numpy as np
 
 from cereal import messaging, car
+from opendbc.car.mazda.values import MazdaFlags
 from opendbc.car.vehicle_model import VehicleModel
 from openpilot.common.realtime import DT_CTRL, Ratekeeper
 from openpilot.common.params import Params
@@ -32,7 +33,8 @@ def joystickd_thread():
     CC.enabled = sm['selfdriveState'].enabled
     CC.latActive = sm['selfdriveState'].active and not sm['carState'].steerFaultTemporary and not sm['carState'].steerFaultPermanent
     CC.longActive = CC.enabled and not any(e.overrideLongitudinal for e in sm['onroadEvents']) and CP.openpilotLongitudinalControl
-    CC.cruiseControl.cancel = sm['carState'].cruiseState.enabled and (not CC.enabled or not CP.pcmCruise)
+    mazda_debug_long = CP.brand == "mazda" and bool(CP.flags & MazdaFlags.DEBUG_LONG.value)
+    CC.cruiseControl.cancel = False if mazda_debug_long else sm['carState'].cruiseState.enabled and (not CC.enabled or not CP.pcmCruise)
     CC.hudControl.leadDistanceBars = 2
 
     actuators = CC.actuators
@@ -48,7 +50,7 @@ def joystickd_thread():
     if CC.longActive:
       actuators.accel = 4.0 * float(np.clip(joystick_axes[0], -1, 1))
       actuators.longControlState = LongCtrlState.pid if sm['carState'].vEgo > CP.vEgoStopping else LongCtrlState.stopping
-      CC.cruiseControl.resume = actuators.accel > 0.0
+      CC.cruiseControl.resume = False if mazda_debug_long else actuators.accel > 0.0
 
     if CC.latActive:
       max_curvature = MAX_LAT_ACCEL / max(sm['carState'].vEgo ** 2, 5)

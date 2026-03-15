@@ -45,6 +45,10 @@ SPEED_BIN_MIN_VEL = [3, 8, 14, 20, 26]  # lower bound per bin
 MIN_POINTS_PER_SPEED_BIN = 600
 FIT_POINTS_PER_SPEED_BIN = 400
 POINTS_PER_SPEED_BUCKET = 500
+SPEED_BIN_FILTER_DECAY = 200  # ~10s time constant (vs 50/2.5s for global) — resist noise
+SPEED_BIN_LAF_SANITY = 0.3  # ±30% of per-bin offline value
+SPEED_BIN_FRICTION_SANITY = 0.5  # ±50% of per-bin offline value
+SPEED_BIN_MIN_CAL_PERC = 80  # min cal% before applying learned values to closure
 
 
 def slope2rot(slope):
@@ -172,15 +176,24 @@ class TorqueEstimator(ParameterEstimator, TorqueEstimatorExt):
                       rowsize=3)
         for _ in SPEED_BIN_BOUNDS
       ]
-      # Initialize filters from per-bin offline values (speed_dependent.toml),
-      # not the global LAF/friction — avoids slow convergence from wrong baseline
+      # Initialize filters at upstream defaults (override.toml LAF/friction).
+      # Per-bin offline values from speed_dependent.toml define sanity bounds only.
       cfg = get_speed_dependent_torque_params().get(self.CP.carFingerprint, {})
-      bin_lafs = cfg.get('laf_bp', [self.offline_latAccelFactor] * len(SPEED_BIN_BOUNDS))
-      bin_frictions = cfg.get('friction_bp', [self.offline_friction] * len(SPEED_BIN_BOUNDS))
+      ref_lafs = cfg.get('laf_bp', [self.offline_latAccelFactor] * len(SPEED_BIN_BOUNDS))
+      ref_frictions = cfg.get('friction_bp', [self.offline_friction] * len(SPEED_BIN_BOUNDS))
       self.speed_bin_filtered = [
-        {'latAccelFactor': FirstOrderFilter(bin_lafs[i], MIN_FILTER_DECAY, DT_MDL),
-         'frictionCoefficient': FirstOrderFilter(bin_frictions[i], MIN_FILTER_DECAY, DT_MDL)}
-        for i in range(len(SPEED_BIN_BOUNDS))
+        {'latAccelFactor': FirstOrderFilter(self.offline_latAccelFactor, SPEED_BIN_FILTER_DECAY, DT_MDL),
+         'frictionCoefficient': FirstOrderFilter(self.offline_friction, SPEED_BIN_FILTER_DECAY, DT_MDL)}
+        for _ in SPEED_BIN_BOUNDS
+      ]
+      # Per-bin sanity bounds from offline reference (±30% LAF, ±50% friction)
+      self.speed_bin_laf_bounds = [
+        (laf * (1.0 - SPEED_BIN_LAF_SANITY), laf * (1.0 + SPEED_BIN_LAF_SANITY))
+        for laf in ref_lafs
+      ]
+      self.speed_bin_friction_bounds = [
+        (f * (1.0 - SPEED_BIN_FRICTION_SANITY), f * (1.0 + SPEED_BIN_FRICTION_SANITY))
+        for f in ref_frictions
       ]
 
   def estimate_params(self):
@@ -209,8 +222,10 @@ class TorqueEstimator(ParameterEstimator, TorqueEstimatorExt):
           _, spread = np.matmul(points[:, [0, 2]], slope2rot(slope)).T
           friction_coeff = np.std(spread) * FRICTION_FACTOR
           if not any(np.isnan(val) for val in [slope, friction_coeff]):
-            laf = np.clip(slope, self.min_lataccel_factor, self.max_lataccel_factor)
-            fric = np.clip(friction_coeff, self.min_friction, self.max_friction)
+            laf_lo, laf_hi = self.speed_bin_laf_bounds[i]
+            fric_lo, fric_hi = self.speed_bin_friction_bounds[i]
+            laf = np.clip(slope, laf_lo, laf_hi)
+            fric = np.clip(friction_coeff, fric_lo, fric_hi)
             self.speed_bin_filtered[i]['latAccelFactor'].update(laf)
             self.speed_bin_filtered[i]['frictionCoefficient'].update(fric)
             results.append((i, True))
@@ -314,11 +329,13 @@ class TorqueEstimator(ParameterEstimator, TorqueEstimatorExt):
     # Speed-binned output
     if self.speed_binned:
       bin_results = self.estimate_params_speed_binned()
+      bin_cal_percs = [float(self.speed_bin_points[i].get_valid_percent()) for i in range(len(SPEED_BIN_BOUNDS))]
       liveTorqueParameters.speedBinCenters = SPEED_BIN_CENTERS
       liveTorqueParameters.speedBinLatAccelFactors = [float(self.speed_bin_filtered[i]['latAccelFactor'].x) for i in range(len(SPEED_BIN_BOUNDS))]
       liveTorqueParameters.speedBinFrictions = [float(self.speed_bin_filtered[i]['frictionCoefficient'].x) for i in range(len(SPEED_BIN_BOUNDS))]
-      liveTorqueParameters.speedBinValid = [valid for _, valid in bin_results]
-      liveTorqueParameters.speedBinCalPerc = [float(self.speed_bin_points[i].get_valid_percent()) for i in range(len(SPEED_BIN_BOUNDS))]
+      # Only mark valid when SVD fit succeeded AND cal% exceeds threshold
+      liveTorqueParameters.speedBinValid = [valid and bin_cal_percs[i] >= SPEED_BIN_MIN_CAL_PERC for i, (_, valid) in enumerate(bin_results)]
+      liveTorqueParameters.speedBinCalPerc = bin_cal_percs
 
     return msg
 

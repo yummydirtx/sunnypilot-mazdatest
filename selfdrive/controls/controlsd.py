@@ -93,11 +93,12 @@ class Controls(ControlsExt):
         self.LaC.update_live_torque_params(torque_params.latAccelFactorFiltered, torque_params.latAccelOffsetFiltered,
                                            torque_params.frictionCoefficientFiltered)
 
-        # Speed-dependent updates (guarded — updated daemon can wipe __pycache__ mid-session)
-        if len(torque_params.speedBinCenters) > 0 and hasattr(self.LaC, 'update_live_torque_params_speed_dep'):
-          # Ensure CI.v_ego is current before speed-dep closures evaluate update_limits()
-          if hasattr(self.LaC, 'CI') and hasattr(self.LaC.CI, 'v_ego'):
-            self.LaC.CI.v_ego = CS.vEgo
+        # Speed-dependent: keep v_ego current for the static closure, and apply
+        # learned values only for bins that passed the cal% threshold in torqued
+        if hasattr(self.LaC, 'CI') and hasattr(self.LaC.CI, 'v_ego'):
+          self.LaC.CI.v_ego = CS.vEgo
+        if len(torque_params.speedBinCenters) > 0 and any(torque_params.speedBinValid) \
+            and hasattr(self.LaC, 'update_live_torque_params_speed_dep'):
           self.LaC.update_live_torque_params_speed_dep(
             list(torque_params.speedBinCenters),
             list(torque_params.speedBinLatAccelFactors),

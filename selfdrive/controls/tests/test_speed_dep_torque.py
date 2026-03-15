@@ -46,31 +46,46 @@ class TestSpeedDepTorqueCallbacks(unittest.TestCase):
         self.assertGreater(len(cfg['speed_bp']), 1,
                            f"{fingerprint} needs at least 2 breakpoints")
 
-  def test_laf_varies_with_speed(self):
-    """LAF should differ between low and high speed for each configured car."""
+  def test_laf_table_is_consistent(self):
+    """laf_bp and speed_bp should have matching lengths and valid values."""
     for fingerprint, cfg in SPEED_DEP_CARS.items():
       with self.subTest(car=fingerprint):
-        bp = cfg['speed_bp']
-        laf = cfg['laf_bp']
-        laf_low = float(np.interp(bp[0], bp, laf))
-        laf_high = float(np.interp(bp[-1], bp, laf))
-        self.assertNotAlmostEqual(laf_low, laf_high, places=1,
-                                  msg=f"{fingerprint}: LAF should vary with speed")
+        self.assertEqual(len(cfg['speed_bp']), len(cfg['laf_bp']))
+        for laf in cfg['laf_bp']:
+          self.assertGreater(laf, 0, f"{fingerprint}: LAF must be positive")
 
-  def test_closure_produces_different_torque_at_different_speeds(self):
-    """Closure callback should produce different torque at low vs high speed."""
+  def test_closure_uses_table_values(self):
+    """Closure should use the LAF table for torque computation."""
     for fingerprint in SPEED_DEP_CARS:
       with self.subTest(car=fingerprint):
         ext = get_car_interface_ext(fingerprint)
         if ext is None or not hasattr(ext, 'torque_from_lateral_accel_speed_dep_closure'):
           self.skipTest(f"No CarInterfaceExt with speed-dep closure for {fingerprint}")
         tp = MagicMock()
-        ext.v_ego = 5.0
-        torque_slow = ext.torque_from_lateral_accel_speed_dep_closure(1.0, tp)
-        ext.v_ego = 25.0
-        torque_fast = ext.torque_from_lateral_accel_speed_dep_closure(1.0, tp)
-        self.assertNotAlmostEqual(torque_slow, torque_fast, places=2,
-                                  msg=f"{fingerprint}: torque should vary with speed")
+        ext.v_ego = 15.0
+        laf = float(np.interp(15.0, ext.speed_dep_speed_bp, ext.speed_dep_laf_v))
+        torque = ext.torque_from_lateral_accel_speed_dep_closure(1.0, tp)
+        self.assertAlmostEqual(torque, 1.0 / laf, places=6,
+                                msg=f"{fingerprint}: closure should use table LAF")
+
+  def test_closure_tracks_updated_table(self):
+    """After update_speed_dep_laf, closure should produce different torque."""
+    for fingerprint, cfg in SPEED_DEP_CARS.items():
+      with self.subTest(car=fingerprint):
+        ext = get_car_interface_ext(fingerprint)
+        if ext is None or not hasattr(ext, 'torque_from_lateral_accel_speed_dep_closure'):
+          self.skipTest(f"No CarInterfaceExt with speed-dep closure for {fingerprint}")
+        tp = MagicMock()
+        ext.v_ego = cfg['speed_bp'][0]
+        torque_before = ext.torque_from_lateral_accel_speed_dep_closure(1.0, tp)
+        # Nudge LAF by +10% (within ±30% bounds)
+        nudged = [v * 1.1 for v in ext.speed_dep_laf_v]
+        ext.update_speed_dep_laf(cfg['speed_bp'], nudged,
+                                  cfg.get('friction_bp', [0.1] * len(cfg['speed_bp'])),
+                                  [True] * len(cfg['speed_bp']))
+        torque_after = ext.torque_from_lateral_accel_speed_dep_closure(1.0, tp)
+        self.assertNotAlmostEqual(torque_before, torque_after, places=3,
+                                   msg=f"{fingerprint}: closure should reflect updated LAF")
 
   def test_inverse_consistency(self):
     """torque -> lat_accel -> torque roundtrip should be identity."""

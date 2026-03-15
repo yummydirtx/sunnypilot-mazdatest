@@ -11,6 +11,7 @@ from openpilot.common.realtime import Ratekeeper
 from openpilot.common.utils import retry
 from openpilot.common.swaglog import cloudlog
 
+from openpilot.system.audio_device_selection import choose_sounddevice
 from openpilot.system import micd
 from openpilot.system.hardware import HARDWARE
 
@@ -153,7 +154,8 @@ class Soundd(QuietMode):
     # reload sounddevice to reinitialize portaudio
     sd._terminate()
     sd._initialize()
-    return sd.OutputStream(channels=1, samplerate=SAMPLE_RATE, callback=self.callback, blocksize=SAMPLE_BUFFER)
+    device = choose_sounddevice(sd, "output", SAMPLE_RATE, channels=1)
+    return sd.OutputStream(channels=1, samplerate=SAMPLE_RATE, callback=self.callback, blocksize=SAMPLE_BUFFER, device=device)
 
   def soundd_thread(self):
     # sounddevice must be imported after forking processes

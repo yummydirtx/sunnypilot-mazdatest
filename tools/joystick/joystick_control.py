@@ -183,7 +183,10 @@ if __name__ == '__main__':
   parser.add_argument('--dump-events', action='store_true', help='Print raw joystick event codes and states')
   args = parser.parse_args()
 
-  if not Params().get_bool("IsOffroad") and "ZMQ" not in os.environ:
+  params = Params()
+  joystick_mode_active = params.get_bool("JoystickDebugMode")
+
+  if not params.get_bool("IsOffroad") and "ZMQ" not in os.environ and not joystick_mode_active:
     print("The car must be off before running joystick_control.")
     exit()
 

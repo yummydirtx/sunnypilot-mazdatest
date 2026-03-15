@@ -45,9 +45,6 @@ SPEED_BIN_MIN_VEL = [3, 8, 14, 20, 26]  # lower bound per bin
 MIN_POINTS_PER_SPEED_BIN = 600
 FIT_POINTS_PER_SPEED_BIN = 400
 POINTS_PER_SPEED_BUCKET = 500
-SPEED_BIN_FILTER_DECAY = 200  # ~10s time constant (vs 50/2.5s for global) — resist noise
-SPEED_BIN_LAF_SANITY = 0.3  # ±30% of per-bin offline value
-SPEED_BIN_FRICTION_SANITY = 0.5  # ±50% of per-bin offline value
 SPEED_BIN_MIN_CAL_PERC = 80  # min cal% before applying learned values to closure
 
 
@@ -176,23 +173,24 @@ class TorqueEstimator(ParameterEstimator, TorqueEstimatorExt):
                       rowsize=3)
         for _ in SPEED_BIN_BOUNDS
       ]
-      # Initialize filters at upstream defaults (override.toml LAF/friction).
-      # Per-bin offline values from speed_dependent.toml define sanity bounds only.
+      # Per-bin bounds and filters — same pattern as global upstream learner.
+      # Bounds use factor_sanity/friction_sanity (respects relaxed toggle).
+      # Filters init at offline LAF/friction, decay ramps like global.
       cfg = get_speed_dependent_torque_params().get(self.CP.carFingerprint, {})
       ref_lafs = cfg.get('laf_bp', [self.offline_latAccelFactor] * len(SPEED_BIN_BOUNDS))
       ref_frictions = cfg.get('friction_bp', [self.offline_friction] * len(SPEED_BIN_BOUNDS))
+      self.speed_bin_decay = MIN_FILTER_DECAY
       self.speed_bin_filtered = [
-        {'latAccelFactor': FirstOrderFilter(self.offline_latAccelFactor, SPEED_BIN_FILTER_DECAY, DT_MDL),
-         'frictionCoefficient': FirstOrderFilter(self.offline_friction, SPEED_BIN_FILTER_DECAY, DT_MDL)}
+        {'latAccelFactor': FirstOrderFilter(self.offline_latAccelFactor, self.speed_bin_decay, DT_MDL),
+         'frictionCoefficient': FirstOrderFilter(self.offline_friction, self.speed_bin_decay, DT_MDL)}
         for _ in SPEED_BIN_BOUNDS
       ]
-      # Per-bin sanity bounds from offline reference (±30% LAF, ±50% friction)
       self.speed_bin_laf_bounds = [
-        (laf * (1.0 - SPEED_BIN_LAF_SANITY), laf * (1.0 + SPEED_BIN_LAF_SANITY))
+        ((1.0 - self.factor_sanity) * laf, (1.0 + self.factor_sanity) * laf)
         for laf in ref_lafs
       ]
       self.speed_bin_friction_bounds = [
-        (f * (1.0 - SPEED_BIN_FRICTION_SANITY), f * (1.0 + SPEED_BIN_FRICTION_SANITY))
+        ((1.0 - self.friction_sanity) * f, (1.0 + self.friction_sanity) * f)
         for f in ref_frictions
       ]
 
@@ -226,8 +224,11 @@ class TorqueEstimator(ParameterEstimator, TorqueEstimatorExt):
             fric_lo, fric_hi = self.speed_bin_friction_bounds[i]
             laf = np.clip(slope, laf_lo, laf_hi)
             fric = np.clip(friction_coeff, fric_lo, fric_hi)
+            self.speed_bin_decay = min(self.speed_bin_decay + DT_MDL, MAX_FILTER_DECAY)
             self.speed_bin_filtered[i]['latAccelFactor'].update(laf)
+            self.speed_bin_filtered[i]['latAccelFactor'].update_alpha(self.speed_bin_decay)
             self.speed_bin_filtered[i]['frictionCoefficient'].update(fric)
+            self.speed_bin_filtered[i]['frictionCoefficient'].update_alpha(self.speed_bin_decay)
             results.append((i, True))
             continue
         except np.linalg.LinAlgError:

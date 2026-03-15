@@ -172,10 +172,15 @@ class TorqueEstimator(ParameterEstimator, TorqueEstimatorExt):
                       rowsize=3)
         for _ in SPEED_BIN_BOUNDS
       ]
+      # Initialize filters from per-bin offline values (speed_dependent.toml),
+      # not the global LAF/friction — avoids slow convergence from wrong baseline
+      cfg = get_speed_dependent_torque_params().get(self.CP.carFingerprint, {})
+      bin_lafs = cfg.get('laf_bp', [self.offline_latAccelFactor] * len(SPEED_BIN_BOUNDS))
+      bin_frictions = cfg.get('friction_bp', [self.offline_friction] * len(SPEED_BIN_BOUNDS))
       self.speed_bin_filtered = [
-        {'latAccelFactor': FirstOrderFilter(self.offline_latAccelFactor, MIN_FILTER_DECAY, DT_MDL),
-         'frictionCoefficient': FirstOrderFilter(self.offline_friction, MIN_FILTER_DECAY, DT_MDL)}
-        for _ in SPEED_BIN_BOUNDS
+        {'latAccelFactor': FirstOrderFilter(bin_lafs[i], MIN_FILTER_DECAY, DT_MDL),
+         'frictionCoefficient': FirstOrderFilter(bin_frictions[i], MIN_FILTER_DECAY, DT_MDL)}
+        for i in range(len(SPEED_BIN_BOUNDS))
       ]
 
   def estimate_params(self):

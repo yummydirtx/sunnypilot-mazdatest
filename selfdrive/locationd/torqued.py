@@ -135,6 +135,13 @@ class TorqueEstimator(ParameterEstimator, TorqueEstimatorExt):
           initial_params['points'] = cache_ltp.points
           self.decay = cache_ltp.decay
           self.filtered_points.load_points(initial_params['points'])
+          # Restore speed-bin filter values from cache
+          if self.speed_binned and len(cache_ltp.speedBinLatAccelFactors) == len(SPEED_BIN_BOUNDS):
+            for i in range(len(SPEED_BIN_BOUNDS)):
+              self.speed_bin_filtered[i]['latAccelFactor'].x = cache_ltp.speedBinLatAccelFactors[i]
+              self.speed_bin_filtered[i]['frictionCoefficient'].x = cache_ltp.speedBinFrictions[i]
+            self.speed_bin_decay = self.decay
+            cloudlog.info("restored speed-bin torque params from cache")
           cloudlog.info("restored torque params from cache")
       except Exception:
         cloudlog.exception("failed to restore cached torque params")

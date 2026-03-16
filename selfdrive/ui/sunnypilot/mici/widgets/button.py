@@ -12,13 +12,10 @@ from collections.abc import Callable
 import pyray as rl
 
 from openpilot.selfdrive.ui.mici.widgets.button import BigButton, BigMultiParamToggle
+from openpilot.selfdrive.ui.ui_state import ui_state
 from openpilot.system.ui.lib.application import FontWeight, gui_app
+from openpilot.system.ui.lib.multilang import tr
 from openpilot.system.ui.lib.text_measure import measure_text_cached
-
-try:
-  from openpilot.common.params import Params
-except ImportError:
-  Params = None
 
 BADGE_GREEN = (rl.Color(100, 180, 120, 88), rl.Color(130, 200, 145, 230))   # (border, text)
 BADGE_GREY = (rl.Color(255, 255, 255, 40), rl.Color(170, 170, 170, 180))   # (border, text)
@@ -26,7 +23,6 @@ CARD_ACTIVE_TINT = rl.Color(140, 230, 150, 255)
 
 
 def speed_unit():
-  from openpilot.selfdrive.ui.ui_state import ui_state  # deferred: avoid circular import
   return "km/h" if ui_state.is_metric else "mph"
 
 
@@ -34,7 +30,7 @@ class BigButtonSP(BigButton):
   """BigButton with badge pills, disabled pill, active-state tinting, and sub-panel linking.
 
   Subtitle area modes (mutually exclusive, set by the corresponding method):
-    set_badges()   → green outlined pill chips (key/value summary)
+    set_badges()    → green outlined pill chips (key/value summary)
     set_disabled()  → single grey 'disabled' pill
     set_value()     → plain text (upstream behavior)
   """
@@ -64,7 +60,7 @@ class BigButtonSP(BigButton):
     """Show a grey 'disabled' pill instead of a text subtitle."""
     if self._disabled:
       return
-    self._set_badges(["disabled"], disabled=True)
+    self._set_badges([tr("disabled")], disabled=True)
 
   def set_value(self, value: str):
     """Set plain text subtitle, clearing any badges."""
@@ -117,7 +113,7 @@ class BigButtonSP(BigButton):
       rows.append(current_row)
 
     text_h = measure_text_cached(font, "Xg", font_size).y
-    max_h = (rect.height - gap * (len(rows) - 1)) / len(rows)
+    max_h = (rect.height - gap * (len(rows) - 1)) / len(rows) if len(rows) > 1 else rect.height
     badge_h = max(text_h, min(text_h + 10, max_h))
 
     # Draw rows bottom-up
@@ -214,13 +210,12 @@ class BigParamOption(BigButton):
     self._picker_label_callback = picker_label_callback
     self._picker_unit = picker_unit
     self._picker_item_width = picker_item_width
-    self._params = Params()
     self._current = self._read_value()
     self._update_display()
     self.set_click_callback(self._open_picker)
 
   def _read_value(self) -> int:
-    val = self._params.get(self._param, return_default=True)
+    val = ui_state.params.get(self._param, return_default=True)
     try:
       return int(float(val)) if val is not None else self._min_value
     except (ValueError, TypeError):

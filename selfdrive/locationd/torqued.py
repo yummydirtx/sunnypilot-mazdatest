@@ -135,11 +135,14 @@ class TorqueEstimator(ParameterEstimator, TorqueEstimatorExt):
           initial_params['points'] = cache_ltp.points
           self.decay = cache_ltp.decay
           self.filtered_points.load_points(initial_params['points'])
-          # Restore speed-bin filter values from cache
+          # Restore speed-bin filter values and points from cache
           if self.speed_binned and len(cache_ltp.speedBinLatAccelFactors) == len(SPEED_BIN_BOUNDS):
             for i in range(len(SPEED_BIN_BOUNDS)):
               self.speed_bin_filtered[i]['latAccelFactor'].x = cache_ltp.speedBinLatAccelFactors[i]
               self.speed_bin_filtered[i]['frictionCoefficient'].x = cache_ltp.speedBinFrictions[i]
+            if len(cache_ltp.speedBinPoints) == len(SPEED_BIN_BOUNDS):
+              for i in range(len(SPEED_BIN_BOUNDS)):
+                self.speed_bin_points[i].load_points(cache_ltp.speedBinPoints[i])
             self.speed_bin_decay = self.decay
             cloudlog.info("restored speed-bin torque params from cache")
           cloudlog.info("restored torque params from cache")
@@ -344,6 +347,8 @@ class TorqueEstimator(ParameterEstimator, TorqueEstimatorExt):
       # Only mark valid when SVD fit succeeded AND cal% exceeds threshold
       liveTorqueParameters.speedBinValid = [valid and bin_cal_percs[i] >= SPEED_BIN_MIN_CAL_PERC for i, (_, valid) in enumerate(bin_results)]
       liveTorqueParameters.speedBinCalPerc = bin_cal_percs
+      if with_points:
+        liveTorqueParameters.speedBinPoints = [bucket.get_points()[:, [0, 2]].tolist() for bucket in self.speed_bin_points]
 
     return msg
 

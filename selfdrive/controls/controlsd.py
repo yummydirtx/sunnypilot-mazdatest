@@ -93,10 +93,7 @@ class Controls(ControlsExt):
         self.LaC.update_live_torque_params(torque_params.latAccelFactorFiltered, torque_params.latAccelOffsetFiltered,
                                            torque_params.frictionCoefficientFiltered)
 
-        # Speed-dependent: keep v_ego current for the static closure, and apply
-        # learned values only for bins that passed the cal% threshold in torqued
-        if hasattr(self.LaC, 'CI') and hasattr(self.LaC.CI, 'v_ego'):
-          self.LaC.CI.v_ego = CS.vEgo
+        # Speed-dependent: apply learned values for bins that passed cal% threshold
         if len(torque_params.speedBinCenters) > 0 and any(torque_params.speedBinValid) \
             and hasattr(self.LaC, 'update_live_torque_params_speed_dep'):
           self.LaC.update_live_torque_params_speed_dep(

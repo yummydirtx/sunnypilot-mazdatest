@@ -185,15 +185,15 @@ class TorqueEstimator(ParameterEstimator, TorqueEstimatorExt):
       ]
       # Per-bin bounds and filters — same pattern as global upstream learner.
       # Bounds use factor_sanity/friction_sanity (respects relaxed toggle).
-      # Filters init at offline LAF/friction, decay ramps like global.
+      # Filters init at per-bin values from speed_dependent.toml (or offline scalar fallback).
       cfg = get_speed_dependent_torque_params().get(self.CP.carFingerprint, {})
       ref_lafs = cfg.get('laf_bp', [self.offline_latAccelFactor] * len(SPEED_BIN_BOUNDS))
       ref_frictions = cfg.get('friction_bp', [self.offline_friction] * len(SPEED_BIN_BOUNDS))
       self.speed_bin_decay = MIN_FILTER_DECAY
       self.speed_bin_filtered = [
-        {'latAccelFactor': FirstOrderFilter(self.offline_latAccelFactor, self.speed_bin_decay, DT_MDL),
-         'frictionCoefficient': FirstOrderFilter(self.offline_friction, self.speed_bin_decay, DT_MDL)}
-        for _ in SPEED_BIN_BOUNDS
+        {'latAccelFactor': FirstOrderFilter(ref_lafs[i], self.speed_bin_decay, DT_MDL),
+         'frictionCoefficient': FirstOrderFilter(ref_frictions[i], self.speed_bin_decay, DT_MDL)}
+        for i in range(len(SPEED_BIN_BOUNDS))
       ]
       self.speed_bin_laf_bounds = [
         ((1.0 - self.factor_sanity) * laf, (1.0 + self.factor_sanity) * laf)

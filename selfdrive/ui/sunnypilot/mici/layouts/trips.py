@@ -17,7 +17,7 @@ from openpilot.selfdrive.ui.lib.api_helpers import get_token
 from openpilot.selfdrive.ui.mici.widgets.button import BigButton
 from openpilot.selfdrive.ui.ui_state import ui_state, device
 from openpilot.system.athena.registration import UNREGISTERED_DONGLE_ID
-from openpilot.selfdrive.ui.sunnypilot.mici.widgets.scroller import NavScroller
+from openpilot.system.ui.widgets.scroller import NavScroller
 
 UPDATE_INTERVAL = 30
 

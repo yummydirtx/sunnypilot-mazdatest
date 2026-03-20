@@ -39,9 +39,9 @@ class SettingsLayoutSP(OP.SettingsLayout):
       btn.set_click_callback(lambda p=panel: gui_app.push_widget(p))
       sp_buttons.append(btn)
 
-    items = self._scroller._items.copy()
+    items = self._scroller.items.copy()
     for i, btn in enumerate(sp_buttons):
       items.insert(1 + i, btn)
-    self._scroller._items.clear()
+    self._scroller.items.clear()
     for item in items:
       self._scroller.add_widget(item)

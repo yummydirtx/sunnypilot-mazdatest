@@ -13,7 +13,7 @@ from openpilot.selfdrive.ui.sunnypilot.mici.widgets.button import (
   BigParamOption,
   speed_unit,
 )
-from openpilot.selfdrive.ui.sunnypilot.mici.widgets.scroller import NavScroller
+from openpilot.system.ui.widgets.scroller import NavScroller
 from openpilot.selfdrive.ui.ui_state import ui_state
 from openpilot.sunnypilot.mads.helpers import MadsSteeringModeOnBrake, get_mads_limited_brands
 from openpilot.system.ui.lib.application import gui_app
@@ -119,7 +119,7 @@ class SteeringLayoutMici(NavScroller):
     offroad = ui_state.is_offroad()
     self._mads_settings_btn.set_enabled(offroad)
     if not mads_on:
-      self._mads_settings_btn.set_value("off")
+      self._mads_settings_btn.set_disabled()
     else:
       cruise = _on_off(ui_state.params.get_bool("MadsMainCruiseAllowed"))
       unified = _on_off(ui_state.params.get_bool("MadsUnifiedEngagementMode"))
@@ -129,7 +129,7 @@ class SteeringLayoutMici(NavScroller):
 
     blinker_on = ui_state.params.get_bool("BlinkerPauseLateralControl")
     if not blinker_on:
-      self._blinker_settings_btn.set_value("off")
+      self._blinker_settings_btn.set_disabled()
     else:
       speed_val = ui_state.params.get("BlinkerMinLateralControlSpeed", return_default=True) or 0
       delay_val = ui_state.params.get("BlinkerLateralReengageDelay", return_default=True) or 0
@@ -138,7 +138,7 @@ class SteeringLayoutMici(NavScroller):
     lc_auto = _on_off(ui_state.params.get_bool("AutoLaneChangeTimer"))
     lc_bsm = _on_off(ui_state.params.get_bool("AutoLaneChangeBsmDelay"))
     if lc_auto == "off" and lc_bsm == "off":
-      self._lane_change_btn.set_value("off")
+      self._lane_change_btn.set_disabled()
     else:
       self._lane_change_btn.set_badges([("auto", lc_auto), ("bsm-delay", lc_bsm)])
 
@@ -148,7 +148,7 @@ class SteeringLayoutMici(NavScroller):
 
     self._torque_settings_btn.set_enabled(torque_allowed)
     if not enforce_torque:
-      self._torque_settings_btn.set_value("off")
+      self._torque_settings_btn.set_disabled()
     else:
       self._torque_settings_btn.set_badges([("enabled", "on"), ("self-tune", _on_off(self_tune_on)), ("custom-tuning", _on_off(custom_on))])
     self._nnlc_toggle.set_enabled(torque_allowed and offroad and not enforce_torque)
@@ -224,12 +224,12 @@ class SteeringLayoutMici(NavScroller):
       item.set_active(enforce_torque)
 
     if not self_tune_on:
-      self._tq_self_tune_btn.set_value("off")
+      self._tq_self_tune_btn.set_disabled()
     else:
       self._tq_self_tune_btn.set_badges([("enabled", "on"), ("less-restrict", _on_off(ui_state.params.get_bool("LiveTorqueParamsRelaxedToggle")))])
 
     if not custom_on:
-      self._tq_custom_btn.set_value("off")
+      self._tq_custom_btn.set_disabled()
     else:
       manual_rt = _on_off(ui_state.params.get_bool("TorqueParamsOverrideEnabled"))
       lat_val = int(ui_state.params.get("TorqueParamsOverrideLatAccelFactor", return_default=True) or 1) / 100

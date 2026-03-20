@@ -12,7 +12,7 @@ from openpilot.selfdrive.ui.sunnypilot.mici.widgets.button import (
   BigParamOption,
   speed_unit,
 )
-from openpilot.selfdrive.ui.sunnypilot.mici.widgets.scroller import NavScroller
+from openpilot.system.ui.widgets.scroller import NavScroller
 from openpilot.selfdrive.ui.ui_state import ui_state
 from openpilot.system.ui.lib.application import gui_app
 
@@ -127,7 +127,7 @@ class CruiseLayoutMici(NavScroller):
     # Custom ACC button subtitle
     acc_on = ui_state.params.get_bool("CustomAccIncrementsEnabled")
     if not acc_on:
-      self._custom_acc_btn.set_value("off")
+      self._custom_acc_btn.set_disabled()
     else:
       unit = speed_unit()
       short_val = ui_state.params.get("CustomAccShortPressIncrement", return_default=True) or 1
@@ -140,7 +140,7 @@ class CruiseLayoutMici(NavScroller):
     sl_mode = SL_MODE_LABELS[min(sl_mode_idx, len(SL_MODE_LABELS) - 1)]
     offset_type = ui_state.params.get("SpeedLimitOffsetType", return_default=True)
     if sl_mode == "off":
-      self._speed_limit_btn.set_value("off")
+      self._speed_limit_btn.set_disabled()
     else:
       sl_source_idx = ui_state.params.get("SpeedLimitPolicy", return_default=True) or 0
       sl_source = SL_SOURCE_LABELS[min(sl_source_idx, len(SL_SOURCE_LABELS) - 1)]

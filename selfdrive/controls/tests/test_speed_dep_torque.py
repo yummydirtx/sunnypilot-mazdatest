@@ -35,7 +35,7 @@ class TestSpeedDepTorqueCallbacks(unittest.TestCase):
   """Test speed-dependent torque callbacks for every configured car."""
 
   def test_config_has_required_keys(self):
-    """Every entry must have speed_bp and laf_bp."""
+    """Every entry must have speed_bp and laf_bp with matching lengths and sorted breakpoints."""
     for fingerprint, cfg in SPEED_DEP_CARS.items():
       with self.subTest(car=fingerprint):
         self.assertIn('speed_bp', cfg, f"{fingerprint} missing speed_bp")
@@ -44,6 +44,14 @@ class TestSpeedDepTorqueCallbacks(unittest.TestCase):
                          f"{fingerprint} speed_bp/laf_bp length mismatch")
         self.assertGreater(len(cfg['speed_bp']), 1,
                            f"{fingerprint} needs at least 2 breakpoints")
+        # speed_bp must be monotonically increasing for np.interp
+        for i in range(len(cfg['speed_bp']) - 1):
+          self.assertLess(cfg['speed_bp'][i], cfg['speed_bp'][i + 1],
+                          f"{fingerprint} speed_bp not sorted at index {i}")
+        # friction_bp length must match if present
+        if 'friction_bp' in cfg:
+          self.assertEqual(len(cfg['friction_bp']), len(cfg['speed_bp']),
+                           f"{fingerprint} friction_bp/speed_bp length mismatch")
 
   def test_laf_values_positive(self):
     """All LAF values must be positive."""
@@ -163,12 +171,29 @@ class TestSpeedDepTorqueCallbacks(unittest.TestCase):
             self.assertAlmostEqual(ext.speed_dep_laf_v[i], original[i], places=4)
 
 
+  def test_update_speed_dep_laf_mismatched_length_rejected(self):
+    """Mismatched array lengths should be a no-op."""
+    for fingerprint, cfg in SPEED_DEP_CARS.items():
+      with self.subTest(car=fingerprint):
+        ext = get_car_interface_ext(fingerprint)
+        if ext is None or not hasattr(ext, 'update_speed_dep_laf'):
+          self.skipTest(f"No update_speed_dep_laf for {fingerprint}")
+        original = list(ext.speed_dep_laf_v)
+        # Send one fewer element than expected
+        short_laf = [v * 1.05 for v in original[:-1]]
+        short_valid = [True] * (len(original) - 1)
+        friction = cfg.get('friction_bp', [0.1] * len(cfg['speed_bp']))
+        ext.update_speed_dep_laf(cfg['speed_bp'], short_laf, friction, short_valid)
+        self.assertEqual(ext.speed_dep_laf_v, original,
+                         f"{fingerprint}: mismatched-length update should be rejected")
+
+
 @unittest.skipIf(len(SPEED_DEP_CARS) == 0, "No cars configured in speed_dependent.toml")
 class TestNonConfiguredCarsUnaffected(unittest.TestCase):
   """Cars NOT in speed_dependent.toml should use linear model."""
 
-  def test_unconfigured_car_uses_linear(self):
-    """A car not in speed_dependent.toml should return linear callback."""
+  def _get_unconfigured_ext(self):
+    """Build an ext for a fake unconfigured car using a configured car's brand."""
     CP = MagicMock()
     CP.carFingerprint = 'DEFINITELY_NOT_A_REAL_CAR'
     CI_Base = MagicMock()
@@ -177,9 +202,19 @@ class TestNonConfiguredCarsUnaffected(unittest.TestCase):
     platform = PLATFORMS.get(brand_fingerprint)
     brand = platform.__class__.__module__.split('.')[-2]
     mod = __import__(f'opendbc.sunnypilot.car.{brand}.interface_ext', fromlist=['CarInterfaceExt'])
-    ext = mod.CarInterfaceExt(CP, CI_Base)
+    return mod.CarInterfaceExt(CP, CI_Base), CI_Base
+
+  def test_unconfigured_car_uses_linear(self):
+    """A car not in speed_dependent.toml should return linear callback."""
+    ext, CI_Base = self._get_unconfigured_ext()
     cb = ext.torque_from_lateral_accel_in_torque_space()
     self.assertEqual(cb, CI_Base.torque_from_lateral_accel_linear_in_torque_space)
+
+  def test_unconfigured_car_update_is_noop(self):
+    """update_speed_dep_laf on an unconfigured car should be a safe no-op."""
+    ext, _ = self._get_unconfigured_ext()
+    # Should not raise even though speed_dep_laf_v doesn't exist
+    ext.update_speed_dep_laf([5.0, 15.0], [2.0, 2.0], [0.1, 0.1], [True, True])
 
 
 if __name__ == '__main__':

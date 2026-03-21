@@ -111,7 +111,9 @@ class ControlsExt(ModelStateBase):
     self.publish_ext(CC_SP, sm, pm)
 
     # Speed-dependent torque: apply per-bin learned values to the lateral controller
-    if self.CP.lateralTuning.which() == 'torque' and sm.all_checks(['liveTorqueParameters']):
+    if (self.CP.lateralTuning.which() == 'torque'
+        and sm.updated.get('liveTorqueParameters', False)
+        and sm.all_checks(['liveTorqueParameters'])):
       tp = sm['liveTorqueParameters']
-      if len(tp.speedBinCenters) > 0 and any(tp.speedBinValid) and hasattr(self.LaC, 'extension'):
+      if tp.useParams and len(tp.speedBinCenters) > 0 and any(tp.speedBinValid) and hasattr(self.LaC, 'extension'):
         self.LaC.extension.update_speed_dep_torque(tp)

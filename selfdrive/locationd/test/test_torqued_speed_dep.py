@@ -21,8 +21,9 @@ from openpilot.sunnypilot.selfdrive.locationd.torqued_ext import (
 SPEED_DEP_CARS = get_speed_dependent_torque_params()
 SPEED_DEP_FINGERPRINT = next(iter(SPEED_DEP_CARS)) if SPEED_DEP_CARS else None
 
-# A fingerprint guaranteed NOT to be in speed_dependent.toml
-NON_SPEED_DEP_FINGERPRINT = 'TOYOTA_COROLLA'
+# Sentinel fingerprint that must not appear in speed_dependent.toml
+NON_SPEED_DEP_FINGERPRINT = 'NOT_IN_SPEED_DEP_TOML'
+assert NON_SPEED_DEP_FINGERPRINT not in SPEED_DEP_CARS, f"{NON_SPEED_DEP_FINGERPRINT} unexpectedly in speed_dependent.toml"
 
 # Both Params locations need mocking: torqued.py (cache) and torqued_ext.py (toggles)
 PATCH_PARAMS = 'openpilot.selfdrive.locationd.torqued.Params'
@@ -94,14 +95,19 @@ class TestSpeedBinnedLearning(unittest.TestCase):
   @patch(PATCH_EXT_PARAMS)
   @patch(PATCH_PARAMS)
   def test_speed_bin_routing(self, mock_params_cls, mock_ext):
-    """Points added to a speed bin should only appear in that bin."""
+    """Points routed by vego should only appear in the selected speed bin."""
     mock_params_cls.return_value.get.return_value = None
     _setup_ext_mock(mock_ext, speed_dep_on=True)
-    est = TorqueEstimator(make_mock_CP())
-    est.speed_bin_points[0].add_point(0.1, 0.3)
-    self.assertEqual(len(est.speed_bin_points[0]), 1)
-    for i in range(1, len(SPEED_BIN_BOUNDS)):
-      self.assertEqual(len(est.speed_bin_points[i]), 0)
+    for bin_idx, (lo, hi) in enumerate(SPEED_BIN_BOUNDS):
+      est = TorqueEstimator(make_mock_CP())
+      vego = (lo + hi) / 2.0
+      est._on_torque_point(0.1, 0.3, vego)
+      self.assertEqual(len(est.speed_bin_points[bin_idx]), 1,
+                       f"bin {bin_idx} ({lo}-{hi} m/s) should have 1 point at vego={vego}")
+      for j in range(len(SPEED_BIN_BOUNDS)):
+        if j != bin_idx:
+          self.assertEqual(len(est.speed_bin_points[j]), 0,
+                           f"bin {j} should be empty when vego={vego}")
 
   @patch(PATCH_EXT_PARAMS)
   @patch(PATCH_PARAMS)

@@ -122,6 +122,7 @@ class TorqueEstimator(ParameterEstimator, TorqueEstimatorExt):
           initial_params['points'] = cache_ltp.points
           self.decay = cache_ltp.decay
           self.filtered_points.load_points(initial_params['points'])
+          self._restore_ext_cache(cache_ltp)
           cloudlog.info("restored torque params from cache")
       except Exception:
         cloudlog.exception("failed to restore cached torque params")
@@ -149,6 +150,7 @@ class TorqueEstimator(ParameterEstimator, TorqueEstimatorExt):
                                          points_per_bucket=POINTS_PER_BUCKET,
                                          rowsize=3)
     self.all_torque_points = []
+    self._post_reset()
 
   def estimate_params(self):
     points = self.filtered_points.get_points(self.fit_points)
@@ -203,9 +205,11 @@ class TorqueEstimator(ParameterEstimator, TorqueEstimatorExt):
         vego = np.interp(t, self.raw_points['carState_t'], self.raw_points['vego'])
         steer = np.interp(t, self.raw_points['carOutput_t'], self.raw_points['steer_torque']).item()
         lateral_acc = (vego * yaw_rate) - (np.sin(roll) * ACCELERATION_DUE_TO_GRAVITY).item()
-        if all(lat_active) and not any(steer_override) and (vego > MIN_VEL) and (abs(steer) > STEER_MIN_THRESHOLD):
+        if all(lat_active) and not any(steer_override) and (abs(steer) > STEER_MIN_THRESHOLD):
           if abs(lateral_acc) <= LAT_ACC_THRESHOLD:
-            self.filtered_points.add_point(steer, lateral_acc)
+            if vego > MIN_VEL:
+              self.filtered_points.add_point(steer, lateral_acc)
+            self._on_torque_point(steer, lateral_acc, vego)
 
           if self.track_all_points:
             self.all_torque_points.append([steer, lateral_acc])
@@ -245,6 +249,7 @@ class TorqueEstimator(ParameterEstimator, TorqueEstimatorExt):
     liveTorqueParameters.calPerc = self.filtered_points.get_valid_percent()
     liveTorqueParameters.decay = self.decay
     liveTorqueParameters.maxResets = self.resets
+    self._extend_msg(liveTorqueParameters, with_points)
     return msg
 
 

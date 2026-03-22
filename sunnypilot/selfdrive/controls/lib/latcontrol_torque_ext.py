@@ -20,9 +20,6 @@ class LatControlTorqueExt(NeuralNetworkLateralControl, LatControlTorqueExtOverri
   def update(self, CS, VM, pid, params, ff, pid_log, setpoint, measurement, calibrated_pose, roll_compensation,
              desired_lateral_accel, actual_lateral_accel, lateral_accel_deadzone, gravity_adjusted_lateral_accel,
              desired_curvature, actual_curvature, steer_limited_by_safety, output_torque):
-    # Update CI's speed for speed-dependent closure callbacks
-    if hasattr(self._CI, 'v_ego'):
-      self._CI.v_ego = CS.vEgo
     self._ff = ff
     self._pid = pid
     self._pid_log = pid_log

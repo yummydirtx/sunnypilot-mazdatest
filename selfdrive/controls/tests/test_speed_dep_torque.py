@@ -8,7 +8,7 @@ import pytest
 
 from unittest.mock import MagicMock  # noqa: TID251
 from opendbc.car.interfaces import get_speed_dependent_torque_params
-from opendbc.sunnypilot.car.interfaces import CarInterfaceBaseSP
+from opendbc.sunnypilot.car.interfaces import CarInterfaceBaseSP, LatControlInputs
 
 # Discover all cars with speed-dependent torque config
 SPEED_DEP_CARS = get_speed_dependent_torque_params()
@@ -21,6 +21,10 @@ def make_ci(fingerprint):
   ci.CP.carFingerprint = fingerprint
   ci._ensure_speed_dep_init()
   return ci
+
+
+def make_inputs(lat_accel, vego):
+  return LatControlInputs(lateral_acceleration=lat_accel, roll_compensation=0.0, vego=vego, aego=0.0)
 
 
 @pytest.mark.skipif(len(SPEED_DEP_CARS) == 0, reason="No cars configured in speed_dependent.toml")
@@ -43,38 +47,27 @@ class TestSpeedDepTorqueCallbacks:
       for laf in cfg['laf_bp']:
         assert laf > 0, f"{fingerprint}: LAF must be positive"
 
-  def test_closure_uses_table_values(self):
+  def test_torque_space_callback_uses_table_values(self):
     for fingerprint, cfg in SPEED_DEP_CARS.items():
       ci = make_ci(fingerprint)
       tp = MagicMock()
-      ci.v_ego = 15.0
+      inputs = make_inputs(lat_accel=1.0, vego=15.0)
       laf = float(np.interp(15.0, cfg['speed_bp'], cfg['laf_bp']))
-      torque = ci._torque_from_lateral_accel_speed_dep_closure(1.0, tp)
-      assert torque == pytest.approx(1.0 / laf, abs=1e-6), f"{fingerprint}: closure should use table LAF"
+      torque = ci._torque_from_lateral_accel_speed_dep_torque_space(inputs, tp, False)
+      assert torque == pytest.approx(1.0 / laf, abs=1e-6), f"{fingerprint}: callback should use table LAF"
 
-  def test_closure_tracks_updated_table(self):
+  def test_torque_space_callback_tracks_updated_table(self):
     for fingerprint, cfg in SPEED_DEP_CARS.items():
       ci = make_ci(fingerprint)
       tp = MagicMock()
-      ci.v_ego = cfg['speed_bp'][0]
-      torque_before = ci._torque_from_lateral_accel_speed_dep_closure(1.0, tp)
+      inputs = make_inputs(lat_accel=1.0, vego=cfg['speed_bp'][0])
+      torque_before = ci._torque_from_lateral_accel_speed_dep_torque_space(inputs, tp, False)
       nudged = [v * 1.1 for v in ci._speed_dep_laf_v]
       friction = cfg.get('friction_bp', [0.1] * len(cfg['speed_bp']))
       ci.update_speed_dep_laf(cfg['speed_bp'], nudged, friction, [True] * len(cfg['speed_bp']))
-      torque_after = ci._torque_from_lateral_accel_speed_dep_closure(1.0, tp)
+      torque_after = ci._torque_from_lateral_accel_speed_dep_torque_space(inputs, tp, False)
       assert torque_before != pytest.approx(torque_after, abs=1e-3), \
-        f"{fingerprint}: closure should reflect updated LAF"
-
-  def test_inverse_consistency(self):
-    for fingerprint in SPEED_DEP_CARS:
-      ci = make_ci(fingerprint)
-      tp = MagicMock()
-      for speed in [5.0, 15.0, 25.0]:
-        ci.v_ego = speed
-        lat_accel = 0.8
-        torque = ci._torque_from_lateral_accel_speed_dep_closure(lat_accel, tp)
-        recovered = ci._lateral_accel_from_torque_speed_dep_closure(torque, tp)
-        assert lat_accel == pytest.approx(recovered, abs=1e-6), f"{fingerprint} @ {speed} m/s: inverse failed"
+        f"{fingerprint}: callback should reflect updated LAF"
 
   def test_configured_car_returns_speed_dep_callback(self):
     for fingerprint in SPEED_DEP_CARS:

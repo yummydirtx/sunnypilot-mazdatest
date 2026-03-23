@@ -58,6 +58,17 @@ system/camerad/test/ae_gray_test
 .coverage*
 coverage.xml
 htmlcov
+pandaextra
+
+.mypy_cache/
+flycheck_*
+
+cppcheck_report.txt
+comma*.sh
+
+selfdrive/modeld/models/*.pkl*
+selfdrive/ui/tests/screenshots/
+sunnypilot/modeld*/models/*.pkl
 
 # openpilot log files
 *.bz2

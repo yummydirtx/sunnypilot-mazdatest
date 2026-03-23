@@ -104,6 +104,8 @@ class FontWeight(StrEnum):
   UNIFONT = "unifont.fnt"
   AUDIOWIDE = "Audiowide-Regular.fnt"
 
+  MONO = "JetBrainsMono-Medium.fnt"
+
   # Small UI fonts
   DISPLAY_REGULAR = "Inter-Regular.fnt"
   ROMAN = "Inter-Regular.fnt"

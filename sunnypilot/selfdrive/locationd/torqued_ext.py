@@ -68,6 +68,8 @@ class TorqueEstimatorExt:
     if self.frame % int(PARAMS_UPDATE_PERIOD / DT_MDL) == 0:
       self.use_live_torque_params = self._params.get_bool("LiveTorqueParamsToggle")
       self.torque_override_enabled = self._params.get_bool("TorqueParamsOverrideEnabled")
+      self.use_speed_dep = self._params.get_bool("SpeedDependentTorqueToggle")
+      self.speed_binned = self.CP.lateralTuning.which() == 'torque' and self.use_speed_dep
 
   def update_use_params(self):
     self._update_params()

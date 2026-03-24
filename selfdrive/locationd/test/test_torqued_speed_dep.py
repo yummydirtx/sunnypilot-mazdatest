@@ -60,8 +60,8 @@ class TestSpeedDepConfig:
 
   def test_speed_bin_bounds_cover_full_range(self):
     all_bounds = [b for bounds in SPEED_BIN_BOUNDS for b in bounds]
-    assert min(all_bounds) == 3
-    assert max(all_bounds) >= 26
+    assert min(all_bounds) == 5
+    assert max(all_bounds) >= 31
 
   def test_speed_bin_centers_match_bounds(self):
     for center, (lo, hi) in zip(SPEED_BIN_CENTERS, SPEED_BIN_BOUNDS, strict=True):

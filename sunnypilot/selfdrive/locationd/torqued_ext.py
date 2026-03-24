@@ -19,9 +19,10 @@ RELAXED_MIN_BUCKET_POINTS = np.array([1, 200, 300, 500, 500, 300, 200, 1])
 
 ALLOWED_CARS = ['toyota', 'hyundai', 'rivian', 'honda']
 
-# Speed-binned learning constants (skip <3 m/s where lat_accel = v*yaw_rate is noisy)
-SPEED_BIN_BOUNDS = [(3, 8), (8, 14), (14, 20), (20, 26), (26, 40)]
-SPEED_BIN_CENTERS = [5.5, 11.0, 17.0, 23.0, 33.0]
+# Speed-binned learning constants — bins aligned with common US driving speeds.
+# Skip <5 m/s where lat_accel = v*yaw_rate is noisy.
+SPEED_BIN_BOUNDS = [(5, 12), (12, 18), (18, 24), (24, 31), (31, 40)]
+SPEED_BIN_CENTERS = [8.5, 15.0, 21.0, 27.5, 35.5]
 MIN_POINTS_PER_SPEED_BIN = 600
 FIT_POINTS_PER_SPEED_BIN = 400
 POINTS_PER_SPEED_BUCKET = 500

@@ -93,16 +93,6 @@ class Controls(ControlsExt):
         self.LaC.update_live_torque_params(torque_params.latAccelFactorFiltered, torque_params.latAccelOffsetFiltered,
                                            torque_params.frictionCoefficientFiltered)
 
-        # Speed-dependent: apply learned values for bins that passed cal% threshold
-        if len(torque_params.speedBinCenters) > 0 and any(torque_params.speedBinValid) \
-            and hasattr(self.LaC, 'update_live_torque_params_speed_dep'):
-          self.LaC.update_live_torque_params_speed_dep(
-            list(torque_params.speedBinCenters),
-            list(torque_params.speedBinLatAccelFactors),
-            list(torque_params.speedBinFrictions),
-            list(torque_params.speedBinValid),
-            torque_params.latAccelOffsetFiltered)
-
         self.LaC.extension.update_limits()
 
       self.LaC.extension.update_model_v2(self.sm['modelV2'])

@@ -17,7 +17,7 @@ from openpilot.sunnypilot import PARAMS_UPDATE_PERIOD
 
 RELAXED_MIN_BUCKET_POINTS = np.array([1, 200, 300, 500, 500, 300, 200, 1])
 
-ALLOWED_CARS = ['toyota', 'hyundai', 'rivian', 'honda', 'mazda']
+ALLOWED_CARS = ['toyota', 'hyundai', 'rivian', 'honda']
 
 # Speed-binned learning constants — bins aligned with common US driving speeds.
 # Skip <5 m/s where lat_accel = v*yaw_rate is noisy.

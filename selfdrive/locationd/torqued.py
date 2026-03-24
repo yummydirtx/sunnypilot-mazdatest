@@ -10,7 +10,6 @@ from openpilot.common.params import Params
 from openpilot.common.realtime import config_realtime_process, DT_MDL
 from openpilot.common.filter_simple import FirstOrderFilter
 from openpilot.common.swaglog import cloudlog
-from opendbc.car.interfaces import get_speed_dependent_torque_params
 from openpilot.selfdrive.locationd.helpers import PointBuckets, ParameterEstimator, PoseCalibrator, Pose
 from openpilot.sunnypilot.livedelay.helpers import get_lat_delay
 from openpilot.sunnypilot.selfdrive.locationd.torqued_ext import TorqueEstimatorExt
@@ -35,17 +34,8 @@ STEER_BUCKET_BOUNDS = [(-0.5, -0.3), (-0.3, -0.2), (-0.2, -0.1), (-0.1, 0), (0, 
 MIN_BUCKET_POINTS = np.array([100, 300, 500, 500, 500, 500, 300, 100])
 MIN_ENGAGE_BUFFER = 2  # secs
 
-VERSION = 2  # bump this to invalidate old parameter caches
+VERSION = 1  # bump this to invalidate old parameter caches
 ALLOWED_CARS = ['toyota', 'hyundai', 'rivian', 'honda', 'volkswagen']
-
-# Speed-binned learning constants (skip <3 m/s where lat_accel = v*yaw_rate is noisy)
-SPEED_BIN_BOUNDS = [(3, 8), (8, 14), (14, 20), (20, 26), (26, 40)]
-SPEED_BIN_CENTERS = [5.5, 11.0, 17.0, 23.0, 33.0]
-SPEED_BIN_MIN_VEL = [3, 8, 14, 20, 26]  # lower bound per bin
-MIN_POINTS_PER_SPEED_BIN = 600
-FIT_POINTS_PER_SPEED_BIN = 400
-POINTS_PER_SPEED_BUCKET = 500
-SPEED_BIN_MIN_CAL_PERC = 80  # min cal% before applying learned values to closure
 
 
 def slope2rot(slope):
@@ -95,9 +85,6 @@ class TorqueEstimator(ParameterEstimator, TorqueEstimatorExt):
 
     self.calibrator = PoseCalibrator()
 
-    # Speed-binned learning for cars with speed-dependent torque params (config-driven)
-    self.speed_binned = CP.carFingerprint in get_speed_dependent_torque_params() and CP.lateralTuning.which() == 'torque'
-
     TorqueEstimatorExt.initialize_custom_params(self, decimated)
 
     self.reset()
@@ -135,16 +122,6 @@ class TorqueEstimator(ParameterEstimator, TorqueEstimatorExt):
           initial_params['points'] = cache_ltp.points
           self.decay = cache_ltp.decay
           self.filtered_points.load_points(initial_params['points'])
-          # Restore speed-bin filter values and points from cache
-          if self.speed_binned and len(cache_ltp.speedBinLatAccelFactors) == len(SPEED_BIN_BOUNDS):
-            for i in range(len(SPEED_BIN_BOUNDS)):
-              self.speed_bin_filtered[i]['latAccelFactor'].x = cache_ltp.speedBinLatAccelFactors[i]
-              self.speed_bin_filtered[i]['frictionCoefficient'].x = cache_ltp.speedBinFrictions[i]
-            if len(cache_ltp.speedBinPoints) == len(SPEED_BIN_BOUNDS):
-              for i in range(len(SPEED_BIN_BOUNDS)):
-                self.speed_bin_points[i].load_points(cache_ltp.speedBinPoints[i])
-            self.speed_bin_decay = self.decay
-            cloudlog.info("restored speed-bin torque params from cache")
           cloudlog.info("restored torque params from cache")
       except Exception:
         cloudlog.exception("failed to restore cached torque params")
@@ -173,37 +150,6 @@ class TorqueEstimator(ParameterEstimator, TorqueEstimatorExt):
                                          rowsize=3)
     self.all_torque_points = []
 
-    # Per-speed-bin buckets for speed-dependent learning
-    if getattr(self, 'speed_binned', False):
-      self.speed_bin_points = [
-        TorqueBuckets(x_bounds=STEER_BUCKET_BOUNDS,
-                      min_points=self.min_bucket_points,
-                      min_points_total=MIN_POINTS_PER_SPEED_BIN,
-                      points_per_bucket=POINTS_PER_SPEED_BUCKET,
-                      rowsize=3)
-        for _ in SPEED_BIN_BOUNDS
-      ]
-      # Per-bin bounds and filters — same pattern as global upstream learner.
-      # Bounds use factor_sanity/friction_sanity (respects relaxed toggle).
-      # Filters init at per-bin values from speed_dependent.toml (or offline scalar fallback).
-      cfg = get_speed_dependent_torque_params().get(self.CP.carFingerprint, {})
-      ref_lafs = cfg.get('laf_bp', [self.offline_latAccelFactor] * len(SPEED_BIN_BOUNDS))
-      ref_frictions = cfg.get('friction_bp', [self.offline_friction] * len(SPEED_BIN_BOUNDS))
-      self.speed_bin_decay = MIN_FILTER_DECAY
-      self.speed_bin_filtered = [
-        {'latAccelFactor': FirstOrderFilter(ref_lafs[i], self.speed_bin_decay, DT_MDL),
-         'frictionCoefficient': FirstOrderFilter(ref_frictions[i], self.speed_bin_decay, DT_MDL)}
-        for i in range(len(SPEED_BIN_BOUNDS))
-      ]
-      self.speed_bin_laf_bounds = [
-        ((1.0 - self.factor_sanity) * laf, (1.0 + self.factor_sanity) * laf)
-        for laf in ref_lafs
-      ]
-      self.speed_bin_friction_bounds = [
-        ((1.0 - self.friction_sanity) * f, (1.0 + self.friction_sanity) * f)
-        for f in ref_frictions
-      ]
-
   def estimate_params(self):
     points = self.filtered_points.get_points(self.fit_points)
     # total least square solution as both x and y are noisy observations
@@ -217,34 +163,6 @@ class TorqueEstimator(ParameterEstimator, TorqueEstimatorExt):
       cloudlog.exception(f"Error computing live torque params: {e}")
       slope = offset = friction_coeff = np.nan
     return slope, offset, friction_coeff
-
-  def estimate_params_speed_binned(self):
-    """Run independent SVD fit per speed bin."""
-    results = []
-    for i, bucket in enumerate(self.speed_bin_points):
-      if bucket.is_calculable():
-        points = bucket.get_points(FIT_POINTS_PER_SPEED_BIN)
-        try:
-          _, _, v = np.linalg.svd(points, full_matrices=False)
-          slope, offset = -v.T[0:2, 2] / v.T[2, 2]
-          _, spread = np.matmul(points[:, [0, 2]], slope2rot(slope)).T
-          friction_coeff = np.std(spread) * FRICTION_FACTOR
-          if not any(np.isnan(val) for val in [slope, friction_coeff]):
-            laf_lo, laf_hi = self.speed_bin_laf_bounds[i]
-            fric_lo, fric_hi = self.speed_bin_friction_bounds[i]
-            laf = np.clip(slope, laf_lo, laf_hi)
-            fric = np.clip(friction_coeff, fric_lo, fric_hi)
-            self.speed_bin_decay = min(self.speed_bin_decay + DT_MDL, MAX_FILTER_DECAY)
-            self.speed_bin_filtered[i]['latAccelFactor'].update(laf)
-            self.speed_bin_filtered[i]['latAccelFactor'].update_alpha(self.speed_bin_decay)
-            self.speed_bin_filtered[i]['frictionCoefficient'].update(fric)
-            self.speed_bin_filtered[i]['frictionCoefficient'].update_alpha(self.speed_bin_decay)
-            results.append((i, True))
-            continue
-        except np.linalg.LinAlgError:
-          pass
-      results.append((i, False))
-    return results
 
   def update_params(self, params):
     self.decay = min(self.decay + DT_MDL, MAX_FILTER_DECAY)

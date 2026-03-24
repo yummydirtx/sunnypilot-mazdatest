@@ -85,7 +85,8 @@ class SteeringLayoutMici(NavScroller):
     self._tq_self_tune_btn.set_subtitle_font_size(24)
     self._tq_self_tune = BigParamControl("enable self-tune", "LiveTorqueParamsToggle")
     self._tq_relaxed = BigParamControl("less restrict", "LiveTorqueParamsRelaxedToggle")
-    self._tq_self_tune_view = self._tq_self_tune_btn.link_sub_panel([self._tq_self_tune, self._tq_relaxed])
+    self._tq_speed_dep = BigParamControl("speed dependent", "SpeedDependentTorqueToggle")
+    self._tq_self_tune_view = self._tq_self_tune_btn.link_sub_panel([self._tq_self_tune, self._tq_relaxed, self._tq_speed_dep])
 
     self._tq_custom_btn = BigButtonSP("custom tune")
     self._tq_custom_btn.set_subtitle_font_size(24)
@@ -209,6 +210,7 @@ class SteeringLayoutMici(NavScroller):
   def _update_torque_state(self, torque_allowed: bool, enforce_torque: bool, self_tune_on: bool, custom_on: bool):
     if not self_tune_on and self._prev_self_tune_on is not False:
       ui_state.params.remove("LiveTorqueParamsRelaxedToggle")
+      ui_state.params.remove("SpeedDependentTorqueToggle")
     self._prev_self_tune_on = self_tune_on
 
     if not gui_app.widget_in_stack(self._tq_view):
@@ -226,7 +228,11 @@ class SteeringLayoutMici(NavScroller):
     if not self_tune_on:
       self._tq_self_tune_btn.set_disabled()
     else:
-      self._tq_self_tune_btn.set_badges([("enabled", "on"), ("less-restrict", _on_off(ui_state.params.get_bool("LiveTorqueParamsRelaxedToggle")))])
+      self._tq_self_tune_btn.set_badges([
+        ("enabled", "on"),
+        ("less-restrict", _on_off(ui_state.params.get_bool("LiveTorqueParamsRelaxedToggle"))),
+        ("speed-dependent", _on_off(ui_state.params.get_bool("SpeedDependentTorqueToggle"))),
+      ])
 
     if not custom_on:
       self._tq_custom_btn.set_disabled()
@@ -240,8 +246,10 @@ class SteeringLayoutMici(NavScroller):
     if gui_app.widget_in_stack(self._tq_self_tune_view):
       self._tq_self_tune.refresh()
       self._tq_relaxed.refresh()
+      self._tq_speed_dep.refresh()
       self._tq_self_tune.set_enabled(offroad)
       self._tq_relaxed.set_enabled(lambda: self._tq_self_tune._checked)
+      self._tq_speed_dep.set_enabled(lambda: self._tq_self_tune._checked and offroad)
 
     if gui_app.widget_in_stack(self._tq_custom_view):
       self._tq_custom.refresh()

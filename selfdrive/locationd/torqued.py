@@ -287,16 +287,9 @@ class TorqueEstimator(ParameterEstimator, TorqueEstimatorExt):
         lateral_acc = (vego * yaw_rate) - (np.sin(roll) * ACCELERATION_DUE_TO_GRAVITY).item()
         if all(lat_active) and not any(steer_override) and (abs(steer) > STEER_MIN_THRESHOLD):
           if abs(lateral_acc) <= LAT_ACC_THRESHOLD:
-            # Global buckets still require MIN_VEL for backward compat
             if vego > MIN_VEL:
               self.filtered_points.add_point(steer, lateral_acc)
-
-            # Route to speed bins for speed-binned cars
-            if self.speed_binned:
-              for i, (lo, hi) in enumerate(SPEED_BIN_BOUNDS):
-                if lo <= vego < hi:
-                  self.speed_bin_points[i].add_point(steer, lateral_acc)
-                  break
+            self._on_torque_point(steer, lateral_acc, vego)
 
           if self.track_all_points:
             self.all_torque_points.append([steer, lateral_acc])
@@ -336,20 +329,7 @@ class TorqueEstimator(ParameterEstimator, TorqueEstimatorExt):
     liveTorqueParameters.calPerc = self.filtered_points.get_valid_percent()
     liveTorqueParameters.decay = self.decay
     liveTorqueParameters.maxResets = self.resets
-
-    # Speed-binned output
-    if self.speed_binned:
-      bin_results = self.estimate_params_speed_binned()
-      bin_cal_percs = [float(self.speed_bin_points[i].get_valid_percent()) for i in range(len(SPEED_BIN_BOUNDS))]
-      liveTorqueParameters.speedBinCenters = SPEED_BIN_CENTERS
-      liveTorqueParameters.speedBinLatAccelFactors = [float(self.speed_bin_filtered[i]['latAccelFactor'].x) for i in range(len(SPEED_BIN_BOUNDS))]
-      liveTorqueParameters.speedBinFrictions = [float(self.speed_bin_filtered[i]['frictionCoefficient'].x) for i in range(len(SPEED_BIN_BOUNDS))]
-      # Only mark valid when SVD fit succeeded AND cal% exceeds threshold
-      liveTorqueParameters.speedBinValid = [valid and bin_cal_percs[i] >= SPEED_BIN_MIN_CAL_PERC for i, (_, valid) in enumerate(bin_results)]
-      liveTorqueParameters.speedBinCalPerc = bin_cal_percs
-      if with_points:
-        liveTorqueParameters.speedBinPoints = [bucket.get_points()[:, [0, 2]].tolist() for bucket in self.speed_bin_points]
-
+    self._extend_msg(liveTorqueParameters, with_points)
     return msg
 
 

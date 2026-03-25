@@ -115,7 +115,7 @@ class TorqueEstimatorExt:
 
     self.frame += 1
 
-  # --- Speed-binned learning hooks (called from torqued.py) ---
+  # --- Speed-binned learning hooks (called from TorqueEstimator) ---
 
   @staticmethod
   def _centers_to_bounds(centers):
@@ -134,9 +134,9 @@ class TorqueEstimatorExt:
       return
 
     from openpilot.selfdrive.locationd.torqued import TorqueBuckets, STEER_BUCKET_BOUNDS, MIN_FILTER_DECAY
-    from opendbc.sunnypilot.car.interfaces import _get_speed_dep_config
+    from opendbc.sunnypilot.car.interfaces import get_speed_dep_config
 
-    cfg = _get_speed_dep_config().get(self.CP.carFingerprint, {})
+    cfg = get_speed_dep_config().get(self.CP.carFingerprint, {})
 
     # Per-car bin ranges from config, or defaults
     if 'speed_bp' in cfg:
@@ -193,7 +193,7 @@ class TorqueEstimatorExt:
         with log.Event.from_bytes(cache) as evt:
           self._restore_ext_cache(evt.liveTorqueParameters)
     except Exception:
-      pass
+      cloudlog.exception("speed-dep: failed to restore cache after reset")
 
   def _on_torque_point(self, steer, lateral_acc, vego):
     """Called from handle_log. Routes quality-filtered points to speed bins."""

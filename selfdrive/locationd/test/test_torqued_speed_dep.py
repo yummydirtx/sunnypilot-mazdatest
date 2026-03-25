@@ -1,12 +1,12 @@
 """Tests for speed-binned learning in torqued (vehicle-agnostic).
 
-Uses get_speed_dependent_torque_params() to discover configured cars.
+Uses get_speed_dep_config() to discover configured cars.
 All tests are driven by config, not hardcoded fingerprints.
 """
 import pytest
 
 from unittest.mock import MagicMock, patch  # noqa: TID251
-from opendbc.sunnypilot.car.interfaces import _get_speed_dep_config
+from opendbc.sunnypilot.car.interfaces import get_speed_dep_config
 from openpilot.selfdrive.locationd.torqued import (
   TorqueEstimator, VERSION,
 )
@@ -15,7 +15,7 @@ from openpilot.sunnypilot.selfdrive.locationd.torqued_ext import (
 )
 
 # Discover configured cars
-SPEED_DEP_CARS = _get_speed_dep_config()
+SPEED_DEP_CARS = get_speed_dep_config()
 SPEED_DEP_FINGERPRINT = next(iter(SPEED_DEP_CARS)) if SPEED_DEP_CARS else None
 
 # Sentinel fingerprint that must not appear in speed_dependent.toml

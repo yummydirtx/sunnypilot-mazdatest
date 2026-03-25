@@ -1,17 +1,17 @@
 """Tests for speed-dependent torque mechanism (vehicle-agnostic).
 
-Uses get_speed_dependent_torque_params() to discover configured cars from
+Uses get_speed_dep_config() to discover configured cars from
 speed_dependent.toml, then tests the CarInterfaceBaseSP callbacks.
 """
 import numpy as np
 import pytest
 
 from unittest.mock import MagicMock  # noqa: TID251
-from opendbc.sunnypilot.car.interfaces import _get_speed_dep_config
+from opendbc.sunnypilot.car.interfaces import get_speed_dep_config
 from opendbc.sunnypilot.car.interfaces import CarInterfaceBaseSP, LatControlInputs
 
 # Discover all cars with speed-dependent torque config
-SPEED_DEP_CARS = _get_speed_dep_config()
+SPEED_DEP_CARS = get_speed_dep_config()
 
 
 def make_ci(fingerprint):

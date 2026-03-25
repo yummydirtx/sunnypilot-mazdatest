@@ -11,7 +11,7 @@ from openpilot.selfdrive.locationd.torqued import (
   TorqueEstimator, VERSION,
 )
 from openpilot.sunnypilot.selfdrive.locationd.torqued_ext import (
-  SPEED_BIN_BOUNDS, SPEED_BIN_CENTERS,
+  DEFAULT_SPEED_BIN_BOUNDS as SPEED_BIN_BOUNDS, DEFAULT_SPEED_BIN_CENTERS as SPEED_BIN_CENTERS,
 )
 
 # Discover configured cars

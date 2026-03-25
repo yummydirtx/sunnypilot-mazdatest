@@ -58,6 +58,8 @@ class LatControlTorqueExt(NeuralNetworkLateralControl, LatControlTorqueExtOverri
     valid_bp = list(torque_params.speedBinValid)
 
     if not speed_bp:
+      # Toggle was turned off — stop using stale speed-dep tables
+      self._speed_dep_active = False
       return
 
     if hasattr(self._CI, 'update_speed_dep_laf'):

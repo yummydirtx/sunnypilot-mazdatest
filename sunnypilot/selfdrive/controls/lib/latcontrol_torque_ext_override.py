@@ -17,18 +17,28 @@ class LatControlTorqueExtOverride:
     self.frame = -1
 
   def update_override_torque_params(self, torque_params) -> bool:
+    changed = False
+
+    # Speed-dep friction: interpolate by current speed before get_friction() uses it.
+    # Must run here (not in extension.update()) because get_friction() reads
+    # torque_params.friction before extension.update() is called.
+    if hasattr(self, '_speed_dep_active') and self._speed_dep_active and self._speed_dep_speed_bp:
+      import numpy as np
+      torque_params.friction = float(np.interp(self._last_vego, self._speed_dep_speed_bp, self._speed_dep_friction_bp))
+      changed = True
+
     if not self.enforce_torque_control_toggle:
-      return False
+      return changed
 
     self.frame += 1
     if self.frame % 300 == 0:
       self.torque_override_enabled = self.params.get_bool("TorqueParamsOverrideEnabled")
 
       if not self.torque_override_enabled:
-        return False
+        return changed
 
       torque_params.latAccelFactor = float(self.params.get("TorqueParamsOverrideLatAccelFactor", return_default=True))
       torque_params.friction = float(self.params.get("TorqueParamsOverrideFriction", return_default=True))
       return True
 
-    return False
+    return changed

@@ -115,5 +115,5 @@ class ControlsExt(ModelStateBase):
         and sm.updated.get('liveTorqueParameters', False)
         and sm.all_checks(['liveTorqueParameters'])):
       tp = sm['liveTorqueParameters']
-      if tp.useParams and len(tp.speedBinCenters) > 0 and hasattr(self.LaC, 'extension'):
+      if tp.useParams and hasattr(self.LaC, 'extension'):
         self.LaC.extension.update_speed_dep_torque(tp)

@@ -15,7 +15,6 @@ class LatControlTorqueExt(NeuralNetworkLateralControl, LatControlTorqueExtOverri
   def __init__(self, lac_torque, CP, CP_SP, CI):
     NeuralNetworkLateralControl.__init__(self, lac_torque, CP, CP_SP, CI)
     LatControlTorqueExtOverride.__init__(self, CP)
-    self._CI = CI
 
   def update(self, CS, VM, pid, params, ff, pid_log, setpoint, measurement, calibrated_pose, roll_compensation,
              desired_lateral_accel, actual_lateral_accel, lateral_accel_deadzone, gravity_adjusted_lateral_accel,
@@ -42,48 +41,28 @@ class LatControlTorqueExt(NeuralNetworkLateralControl, LatControlTorqueExtOverri
 
     return self._pid_log, self._output_torque
 
-  def update_speed_dep_torque(self, torque_params):
-    """Apply speed-dependent learned values from torqued to the CI and PID limits.
-
-    Two paths depending on whether the car has a speed_dependent.toml entry:
-    - Configured cars: CI has per-bin tables with seeds. We update valid bins
-      via CI and read back the gated values (seeds for invalid, learned for valid).
-    - Unconfigured cars: CI has no speed-dep config. Torqued seeds all bins with
-      the global offline LAF/friction. We use torqued's values directly, gating
-      on valid_bp (invalid bins get the global filtered values as fallback).
-    """
-    speed_bp = list(torque_params.speedBinCenters)
-    laf_bp = list(torque_params.speedBinLatAccelFactors)
-    friction_bp = list(torque_params.speedBinFrictions)
-    valid_bp = list(torque_params.speedBinValid)
-
+  def update_speed_dep_torque(self, tp):
+    """Apply speed-dependent learned values from torqued.
+    Uses learned values for valid bins, global filtered as fallback."""
+    speed_bp = list(tp.speedBinCenters)
     if not speed_bp:
-      # Toggle was turned off — stop using stale speed-dep tables
       self._speed_dep_active = False
       return
 
-    if hasattr(self._CI, 'update_speed_dep_laf'):
-      self._CI.update_speed_dep_laf(speed_bp, laf_bp, friction_bp, valid_bp)
-
-    # Read back the CI's gated values if it has speed-dep config
-    if hasattr(self._CI, '_speed_dep') and self._CI._speed_dep:
-      gated_laf_bp = list(self._CI._speed_dep_laf_v)
-      gated_friction_bp = list(self._CI._speed_dep_friction_v)
-    else:
-      # Unconfigured car: use torqued values for valid bins, global filtered for invalid
-      global_laf = torque_params.latAccelFactorFiltered
-      global_friction = torque_params.frictionCoefficientFiltered
-      gated_laf_bp = [laf_bp[i] if valid_bp[i] else global_laf for i in range(len(speed_bp))]
-      gated_friction_bp = [friction_bp[i] if valid_bp[i] else global_friction for i in range(len(speed_bp))]
+    laf_bp = list(tp.speedBinLatAccelFactors)
+    friction_bp = list(tp.speedBinFrictions)
+    valid_bp = list(tp.speedBinValid)
+    global_laf = tp.latAccelFactorFiltered
+    global_fric = tp.frictionCoefficientFiltered
 
     self._speed_dep_active = True
     self._speed_dep_speed_bp = speed_bp
-    self._speed_dep_laf_bp = gated_laf_bp
-    self._speed_dep_friction_bp = gated_friction_bp
+    self._speed_dep_laf_bp = [laf_bp[i] if valid_bp[i] else global_laf for i in range(len(speed_bp))]
+    self._speed_dep_friction_bp = [friction_bp[i] if valid_bp[i] else global_fric for i in range(len(speed_bp))]
 
     # Set representative values at 20 m/s for PID limits (actual per-frame
     # interpolation happens in update_override_torque_params before each frame)
-    self.lac_torque.torque_params.latAccelFactor = float(np.interp(20.0, speed_bp, gated_laf_bp))
-    self.lac_torque.torque_params.latAccelOffset = torque_params.latAccelOffsetFiltered
-    self.lac_torque.torque_params.friction = float(np.interp(20.0, speed_bp, gated_friction_bp))
+    self.lac_torque.torque_params.latAccelFactor = float(np.interp(20.0, speed_bp, self._speed_dep_laf_bp))
+    self.lac_torque.torque_params.latAccelOffset = tp.latAccelOffsetFiltered
+    self.lac_torque.torque_params.friction = float(np.interp(20.0, speed_bp, self._speed_dep_friction_bp))
     self.lac_torque.update_limits()

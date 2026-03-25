@@ -18,6 +18,7 @@ class LatControlTorqueExt(NeuralNetworkLateralControl, LatControlTorqueExtOverri
     self._CI = CI
     self._speed_dep_active = False
     self._speed_dep_speed_bp = []
+    self._speed_dep_laf_bp = []
     self._speed_dep_friction_bp = []
     self._last_vego = 0.0  # stored for update_override_torque_params (runs before update)
 
@@ -80,9 +81,11 @@ class LatControlTorqueExt(NeuralNetworkLateralControl, LatControlTorqueExtOverri
 
     self._speed_dep_active = True
     self._speed_dep_speed_bp = speed_bp
+    self._speed_dep_laf_bp = gated_laf_bp
     self._speed_dep_friction_bp = gated_friction_bp
 
-    # Use representative values at 20 m/s for PID limits
+    # Set representative values at 20 m/s for PID limits (actual per-frame
+    # interpolation happens in update_override_torque_params before each frame)
     self.lac_torque.torque_params.latAccelFactor = float(np.interp(20.0, speed_bp, gated_laf_bp))
     self.lac_torque.torque_params.latAccelOffset = torque_params.latAccelOffsetFiltered
     self.lac_torque.torque_params.friction = float(np.interp(20.0, speed_bp, gated_friction_bp))

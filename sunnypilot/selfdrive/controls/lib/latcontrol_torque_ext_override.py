@@ -19,11 +19,12 @@ class LatControlTorqueExtOverride:
   def update_override_torque_params(self, torque_params) -> bool:
     changed = False
 
-    # Speed-dep friction: interpolate by current speed before get_friction() uses it.
-    # Must run here (not in extension.update()) because get_friction() reads
-    # torque_params.friction before extension.update() is called.
+    # Speed-dep LAF and friction: interpolate by current speed each frame.
+    # Must run here (before get_friction and torque_from_lateral_accel use
+    # torque_params) because extension.update() runs after those calls.
     if hasattr(self, '_speed_dep_active') and self._speed_dep_active and self._speed_dep_speed_bp:
       import numpy as np
+      torque_params.latAccelFactor = float(np.interp(self._last_vego, self._speed_dep_speed_bp, self._speed_dep_laf_bp))
       torque_params.friction = float(np.interp(self._last_vego, self._speed_dep_speed_bp, self._speed_dep_friction_bp))
       changed = True
 

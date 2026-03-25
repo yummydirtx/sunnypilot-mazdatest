@@ -39,9 +39,9 @@ class TorqueEstimatorExt:
   Data flow:
     1. torqued calls _on_torque_point() for each quality-filtered sample → routed to speed bin
     2. _estimate_params_speed_binned() runs independent SVD fit per bin (same algo as upstream)
-    3. _extend_msg() writes per-bin LAF/friction/valid/cal% to cereal message
+    3. _extend_msg() writes per-bin latAccelFactor/friction/valid/cal% to cereal message
     4. controlsd_ext picks up the message and calls latcontrol_torque_ext.update_speed_dep_torque()
-    5. The lateral controller interpolates LAF and friction by speed each frame
+    5. The lateral controller interpolates latAccelFactor and friction by speed each frame
 
   Bin configuration:
     - Cars with a speed_dependent.toml entry use per-car bin centers (and derived bounds)
@@ -169,9 +169,9 @@ class TorqueEstimatorExt:
     # toggle. Without this, default factor_sanity=0.0 would clamp learned values
     # to exactly the seed values, silently preventing any learning.
     SPEED_BIN_SANITY = 0.3
-    self.speed_bin_laf_bounds = [
-      ((1.0 - SPEED_BIN_SANITY) * laf, (1.0 + SPEED_BIN_SANITY) * laf)
-      for laf in ref_lafs
+    self.speed_bin_lat_accel_factor_bounds = [
+      ((1.0 - SPEED_BIN_SANITY) * factor, (1.0 + SPEED_BIN_SANITY) * factor)
+      for factor in ref_lafs
     ]
     self.speed_bin_friction_bounds = [
       ((1.0 - SPEED_BIN_SANITY) * f, (1.0 + SPEED_BIN_SANITY) * f)
@@ -234,12 +234,12 @@ class TorqueEstimatorExt:
           _, spread = np.matmul(points[:, [0, 2]], slope2rot(slope)).T
           friction_coeff = np.std(spread) * FRICTION_FACTOR
           if not any(np.isnan(val) for val in [slope, friction_coeff]):
-            laf_lo, laf_hi = self.speed_bin_laf_bounds[i]
+            factor_lo, factor_hi = self.speed_bin_lat_accel_factor_bounds[i]
             fric_lo, fric_hi = self.speed_bin_friction_bounds[i]
-            laf = np.clip(slope, laf_lo, laf_hi)
+            clipped_factor = np.clip(slope, factor_lo, factor_hi)
             fric = np.clip(friction_coeff, fric_lo, fric_hi)
             self.speed_bin_decays[i] = min(self.speed_bin_decays[i] + DT_MDL, MAX_FILTER_DECAY)
-            self.speed_bin_filtered[i]['latAccelFactor'].update(laf)
+            self.speed_bin_filtered[i]['latAccelFactor'].update(clipped_factor)
             self.speed_bin_filtered[i]['latAccelFactor'].update_alpha(self.speed_bin_decays[i])
             self.speed_bin_filtered[i]['frictionCoefficient'].update(fric)
             self.speed_bin_filtered[i]['frictionCoefficient'].update_alpha(self.speed_bin_decays[i])

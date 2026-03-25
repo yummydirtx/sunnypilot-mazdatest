@@ -1,7 +1,7 @@
 """Integration tests for speed-dependent torque — controller pipeline.
 
 Tests the full data flow from torqued output through controlsd to the
-torque_params used in the steering controller: per-frame LAF and friction
+torque_params used in the steering controller: per-frame latAccelFactor and friction
 interpolation, sanity bounds, toggle-off behavior, and manual override.
 
 Tests LatControlTorqueExtOverride directly (the class that owns the
@@ -23,7 +23,7 @@ PATCH_PARAMS_TORQUED = 'openpilot.selfdrive.locationd.torqued.Params'
 
 # Sample tables
 SAMPLE_SPEED_BP = [6.5, 10.0, 15.0, 21.0, 26.5, 32.0, 37.5]
-SAMPLE_LAF_BP = [2.39, 2.52, 2.71, 2.39, 2.28, 2.22, 2.21]
+SAMPLE_LAT_ACCEL_FACTOR_BP = [2.39, 2.52, 2.71, 2.39, 2.28, 2.22, 2.21]
 SAMPLE_FRICTION_BP = [0.177, 0.158, 0.131, 0.118, 0.113, 0.109, 0.108]
 
 
@@ -37,7 +37,7 @@ class TorqueParams:
 
 @patch(PATCH_PARAMS_OVERRIDE)
 def make_override(mock_params_cls, enforce=False, manual_override=False,
-                  manual_laf='200', manual_friction='15'):
+                  manual_lat_accel_factor='200', manual_friction='15'):
   """Create a LatControlTorqueExtOverride with mocked Params."""
   mock_inst = mock_params_cls.return_value
   mock_inst.get_bool.side_effect = lambda k: {
@@ -45,7 +45,7 @@ def make_override(mock_params_cls, enforce=False, manual_override=False,
     'TorqueParamsOverrideEnabled': manual_override,
   }.get(k, False)
   mock_inst.get.side_effect = lambda k, **kw: {
-    'TorqueParamsOverrideLatAccelFactor': manual_laf,
+    'TorqueParamsOverrideLatAccelFactor': manual_lat_accel_factor,
     'TorqueParamsOverrideFriction': manual_friction,
   }.get(k)
 
@@ -54,11 +54,11 @@ def make_override(mock_params_cls, enforce=False, manual_override=False,
   return ovr
 
 
-def activate_speed_dep(ovr, speed_bp=None, laf_bp=None, friction_bp=None):
+def activate_speed_dep(ovr, speed_bp=None, lat_accel_factor_bp=None, friction_bp=None):
   """Simulate update_speed_dep_torque setting tables on the override."""
   ovr._speed_dep_active = True
   ovr._speed_dep_speed_bp = speed_bp or list(SAMPLE_SPEED_BP)
-  ovr._speed_dep_laf_bp = laf_bp or list(SAMPLE_LAF_BP)
+  ovr._speed_dep_lat_accel_factor_bp = lat_accel_factor_bp or list(SAMPLE_LAT_ACCEL_FACTOR_BP)
   ovr._speed_dep_friction_bp = friction_bp or list(SAMPLE_FRICTION_BP)
 
 
@@ -66,7 +66,7 @@ class TestLafInterpolatedBySpeed:
   """torque_params.latAccelFactor must be speed-interpolated
   before torque_from_lateral_accel reads it."""
 
-  def test_laf_set_to_interpolated_value(self):
+  def test_lat_accel_factor_set_to_interpolated_value(self):
     ovr = make_override()
     activate_speed_dep(ovr)
     tp = TorqueParams(latAccelFactor=999.0)  # sentinel
@@ -74,39 +74,39 @@ class TestLafInterpolatedBySpeed:
     ovr._last_vego = 10.0
     ovr.update_override_torque_params(tp)
 
-    expected = float(np.interp(10.0, SAMPLE_SPEED_BP, SAMPLE_LAF_BP))
+    expected = float(np.interp(10.0, SAMPLE_SPEED_BP, SAMPLE_LAT_ACCEL_FACTOR_BP))
     assert tp.latAccelFactor == pytest.approx(expected, abs=1e-4), \
-      f"LAF should be {expected}, got {tp.latAccelFactor}"
+      f"latAccelFactor should be {expected}, got {tp.latAccelFactor}"
 
-  def test_laf_differs_at_different_speeds(self):
+  def test_lat_accel_factor_differs_at_different_speeds(self):
     ovr = make_override()
     activate_speed_dep(ovr)
 
     tp = TorqueParams()
     ovr._last_vego = 6.5
     ovr.update_override_torque_params(tp)
-    laf_low = tp.latAccelFactor
+    factor_low = tp.latAccelFactor
 
     tp = TorqueParams()
     ovr._last_vego = 37.5
     ovr.update_override_torque_params(tp)
-    laf_high = tp.latAccelFactor
+    factor_high = tp.latAccelFactor
 
-    assert laf_low != pytest.approx(laf_high, abs=0.01), \
-      "LAF must differ between 6.5 m/s and 37.5 m/s"
+    assert factor_low != pytest.approx(factor_high, abs=0.01), \
+      "latAccelFactor must differ between 6.5 m/s and 37.5 m/s"
 
-  def test_laf_not_global_value(self):
-    """The whole point: LAF should NOT be the global scalar."""
+  def test_lat_accel_factor_not_global_value(self):
+    """latAccelFactor should NOT be the global scalar."""
     ovr = make_override()
     activate_speed_dep(ovr)
-    global_laf = 2.0
-    tp = TorqueParams(latAccelFactor=global_laf)
+    global_factor = 2.0
+    tp = TorqueParams(latAccelFactor=global_factor)
 
-    ovr._last_vego = 6.5  # seed LAF at 6.5 is 2.39, not 2.0
+    ovr._last_vego = 6.5  # seed latAccelFactor at 6.5 is 2.39, not 2.0
     ovr.update_override_torque_params(tp)
 
-    assert tp.latAccelFactor != pytest.approx(global_laf, abs=0.01), \
-      "LAF should be speed-interpolated, not the global value"
+    assert tp.latAccelFactor != pytest.approx(global_factor, abs=0.01), \
+      "latAccelFactor should be speed-interpolated, not the global value"
 
 
 class TestFrictionInterpolatedBySpeed:
@@ -179,7 +179,7 @@ class TestManualOverridePriority:
 
   def test_manual_overwrites_speed_dep(self):
     ovr = make_override(enforce=True, manual_override=True,
-                        manual_laf='350', manual_friction='25')
+                        manual_lat_accel_factor='350', manual_friction='25')
     activate_speed_dep(ovr)
     ovr._last_vego = 15.0
 
@@ -188,7 +188,7 @@ class TestManualOverridePriority:
     ovr.update_override_torque_params(tp)
 
     assert tp.latAccelFactor == pytest.approx(350.0, abs=0.1), \
-      "Manual LAF should overwrite speed-dep"
+      "Manual latAccelFactor should overwrite speed-dep"
     assert tp.friction == pytest.approx(25.0, abs=0.1), \
       "Manual friction should overwrite speed-dep"
 
@@ -200,8 +200,8 @@ class TestManualOverridePriority:
     tp = TorqueParams()
     ovr.update_override_torque_params(tp)
 
-    expected_laf = float(np.interp(15.0, SAMPLE_SPEED_BP, SAMPLE_LAF_BP))
-    assert tp.latAccelFactor == pytest.approx(expected_laf, abs=1e-4), \
+    expected_factor = float(np.interp(15.0, SAMPLE_SPEED_BP, SAMPLE_LAT_ACCEL_FACTOR_BP))
+    assert tp.latAccelFactor == pytest.approx(expected_factor, abs=1e-4), \
       "Without manual override, speed-dep should be used"
 
 
@@ -261,8 +261,8 @@ class TestLearnerSanityBounds:
     est = TorqueEstimator(CP)
     est._on_torque_point(0.1, 0.3, 10.0)  # trigger lazy init
 
-    for i, (lo, hi) in enumerate(est.speed_bin_laf_bounds):
-      assert hi > lo, f"Bin {i} LAF bounds ({lo:.3f}, {hi:.3f}) must allow a range"
+    for i, (lo, hi) in enumerate(est.speed_bin_lat_accel_factor_bounds):
+      assert hi > lo, f"Bin {i} latAccelFactor bounds ({lo:.3f}, {hi:.3f}) must allow a range"
 
     for i, (lo, hi) in enumerate(est.speed_bin_friction_bounds):
       assert hi > lo, f"Bin {i} friction bounds ({lo:.3f}, {hi:.3f}) must allow a range"
@@ -288,9 +288,9 @@ class TestLearnerSanityBounds:
     est = TorqueEstimator(CP)
     est._on_torque_point(0.1, 0.3, 10.0)
 
-    seed_laf = est.speed_bin_filtered[0]['latAccelFactor'].x
-    nudged = seed_laf * 1.10
-    lo, hi = est.speed_bin_laf_bounds[0]
+    seed_factor = est.speed_bin_filtered[0]['latAccelFactor'].x
+    nudged = seed_factor * 1.10
+    lo, hi = est.speed_bin_lat_accel_factor_bounds[0]
     clipped = np.clip(nudged, lo, hi)
     assert clipped == pytest.approx(nudged, abs=1e-6), \
       f"+10% nudge ({nudged:.3f}) should not be clipped by +/-30% bounds ({lo:.3f}, {hi:.3f})"
@@ -329,5 +329,5 @@ class TestToggleOffFallback:
     ovr._last_vego = 15.0
     ovr.update_override_torque_params(tp)
 
-    expected_laf = float(np.interp(15.0, SAMPLE_SPEED_BP, SAMPLE_LAF_BP))
-    assert tp.latAccelFactor == pytest.approx(expected_laf, abs=1e-4)
+    expected_factor = float(np.interp(15.0, SAMPLE_SPEED_BP, SAMPLE_LAT_ACCEL_FACTOR_BP))
+    assert tp.latAccelFactor == pytest.approx(expected_factor, abs=1e-4)

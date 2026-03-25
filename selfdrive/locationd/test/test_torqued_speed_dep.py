@@ -37,7 +37,7 @@ def _setup_ext_mock(mock_ext_params_cls, speed_dep_on):
   mock_ext_params_cls.return_value.get.return_value = None
 
 
-def make_mock_CP(fingerprint=None, laf=1.25, friction=0.125):
+def make_mock_CP(fingerprint=None, lat_accel_factor=1.25, friction=0.125):
   if fingerprint is None:
     fingerprint = SPEED_DEP_FINGERPRINT
   CP = MagicMock()
@@ -45,7 +45,7 @@ def make_mock_CP(fingerprint=None, laf=1.25, friction=0.125):
   CP.carFingerprint = fingerprint
   CP.lateralTuning.which.return_value = 'torque'
   CP.lateralTuning.torque.friction = friction
-  CP.lateralTuning.torque.latAccelFactor = laf
+  CP.lateralTuning.torque.latAccelFactor = lat_accel_factor
   return CP
 
 
@@ -123,7 +123,7 @@ class TestSpeedBinnedLearning:
   def test_global_fit_unchanged(self, mock_params_cls, mock_ext):
     mock_params_cls.return_value.get.return_value = None
     _setup_ext_mock(mock_ext, speed_dep_on=True)
-    est = TorqueEstimator(make_mock_CP(laf=1.25, friction=0.125))
+    est = TorqueEstimator(make_mock_CP(lat_accel_factor=1.25, friction=0.125))
     msg = est.get_msg()
     ltp = msg.liveTorqueParameters
     assert ltp.latAccelFactorFiltered == pytest.approx(1.25, abs=1e-2)
@@ -181,7 +181,7 @@ class TestBackwardCompatibility:
   def test_unconfigured_car_global_params_still_work(self, mock_params_cls, mock_ext):
     mock_params_cls.return_value.get.return_value = None
     _setup_ext_mock(mock_ext, speed_dep_on=False)
-    est = TorqueEstimator(make_mock_CP(fingerprint=NON_SPEED_DEP_FINGERPRINT, laf=2.0, friction=0.15))
+    est = TorqueEstimator(make_mock_CP(fingerprint=NON_SPEED_DEP_FINGERPRINT, lat_accel_factor=2.0, friction=0.15))
     msg = est.get_msg()
     ltp = msg.liveTorqueParameters
     assert ltp.latAccelFactorFiltered == pytest.approx(2.0, abs=1e-2)

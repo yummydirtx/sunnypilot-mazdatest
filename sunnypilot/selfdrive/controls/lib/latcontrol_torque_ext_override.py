@@ -21,21 +21,21 @@ class LatControlTorqueExtOverride:
     # Speed-dep state (set by LatControlTorqueExt subclass)
     self._speed_dep_active = False
     self._speed_dep_speed_bp = []
-    self._speed_dep_laf_bp = []
+    self._speed_dep_lat_accel_factor_bp = []
     self._speed_dep_friction_bp = []
     self._last_vego = 0.0
 
   def update_override_torque_params(self, torque_params) -> bool:
     changed = False
 
-    # Speed-dep LAF and friction: interpolate by current speed each frame.
+    # Speed-dep latAccelFactor and friction: interpolate by current speed each frame.
     # Must run here (before get_friction and torque_from_lateral_accel use
     # torque_params) because extension.update() runs after those calls.
     if self._speed_dep_active and self._speed_dep_speed_bp:
-      new_laf = float(np.interp(self._last_vego, self._speed_dep_speed_bp, self._speed_dep_laf_bp))
+      new_lat_accel_factor = float(np.interp(self._last_vego, self._speed_dep_speed_bp, self._speed_dep_lat_accel_factor_bp))
       new_fric = float(np.interp(self._last_vego, self._speed_dep_speed_bp, self._speed_dep_friction_bp))
-      if new_laf != torque_params.latAccelFactor or new_fric != torque_params.friction:
-        torque_params.latAccelFactor = new_laf
+      if new_lat_accel_factor != torque_params.latAccelFactor or new_fric != torque_params.friction:
+        torque_params.latAccelFactor = new_lat_accel_factor
         torque_params.friction = new_fric
         changed = True
 

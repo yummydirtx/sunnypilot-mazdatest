@@ -49,20 +49,20 @@ class LatControlTorqueExt(NeuralNetworkLateralControl, LatControlTorqueExtOverri
       self._speed_dep_active = False
       return
 
-    laf_bp = list(tp.speedBinLatAccelFactors)
-    friction_bp = list(tp.speedBinFrictions)
+    factors = list(tp.speedBinLatAccelFactors)
+    frictions = list(tp.speedBinFrictions)
     valid_bp = list(tp.speedBinValid)
-    global_laf = tp.latAccelFactorFiltered
+    global_factor = tp.latAccelFactorFiltered
     global_fric = tp.frictionCoefficientFiltered
 
     self._speed_dep_active = True
     self._speed_dep_speed_bp = speed_bp
-    self._speed_dep_laf_bp = [laf_bp[i] if valid_bp[i] else global_laf for i in range(len(speed_bp))]
-    self._speed_dep_friction_bp = [friction_bp[i] if valid_bp[i] else global_fric for i in range(len(speed_bp))]
+    self._speed_dep_lat_accel_factor_bp = [factors[i] if valid_bp[i] else global_factor for i in range(len(speed_bp))]
+    self._speed_dep_friction_bp = [frictions[i] if valid_bp[i] else global_fric for i in range(len(speed_bp))]
 
     # Set representative values at 20 m/s for PID limits (actual per-frame
     # interpolation happens in update_override_torque_params before each frame)
-    self.lac_torque.torque_params.latAccelFactor = float(np.interp(20.0, speed_bp, self._speed_dep_laf_bp))
+    self.lac_torque.torque_params.latAccelFactor = float(np.interp(20.0, speed_bp, self._speed_dep_lat_accel_factor_bp))
     self.lac_torque.torque_params.latAccelOffset = tp.latAccelOffsetFiltered
     self.lac_torque.torque_params.friction = float(np.interp(20.0, speed_bp, self._speed_dep_friction_bp))
     self.lac_torque.update_limits()

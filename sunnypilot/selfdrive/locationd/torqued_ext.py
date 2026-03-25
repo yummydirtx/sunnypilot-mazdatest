@@ -60,6 +60,7 @@ class TorqueEstimatorExt:
     self.torque_override_enabled = self._params.get_bool("TorqueParamsOverrideEnabled")
     self.use_speed_dep = self._params.get_bool("SpeedDependentTorqueToggle")
     self.speed_binned = False
+    self._speed_bin_resets = -1
     self.min_bucket_points = RELAXED_MIN_BUCKET_POINTS
     self.factor_sanity = 0.0
     self.friction_sanity = 0.0
@@ -81,6 +82,20 @@ class TorqueEstimatorExt:
 
     # Speed-binned learning: toggle-gated, works for any torque car
     self.speed_binned = self.CP.lateralTuning.which() == 'torque' and self.use_speed_dep
+
+    # Eagerly init speed bins and restore cache so bins exist before the
+    # first cache write (frame 0). Without this, the first cache write emits
+    # empty bin arrays that overwrite the previous route's cached points.
+    if self.speed_binned:
+      self._post_reset()
+      try:
+        from cereal import log
+        cache = self._params.get("LiveTorqueParameters")
+        if cache:
+          with log.Event.from_bytes(cache) as evt:
+            self._restore_ext_cache(evt.liveTorqueParameters)
+      except Exception:
+        cloudlog.exception("speed-dep: failed to restore cache on init")
 
   def _update_params(self):
     if self.frame % int(PARAMS_UPDATE_PERIOD / DT_MDL) == 0:
@@ -165,12 +180,12 @@ class TorqueEstimatorExt:
     ]
 
   def _ensure_speed_bins(self):
-    """Lazy init: create bins and restore cache on first use."""
+    """Init speed bins if needed (after a reset or on first call)."""
     if hasattr(self, 'speed_bin_points') and self._speed_bin_resets == self.resets:
       return
+    # If bins already exist from eager init but resets changed, re-init
     self._speed_bin_resets = self.resets
     self._post_reset()
-    # Restore from cache if available
     try:
       from cereal import log
       cache = self._params.get("LiveTorqueParameters")
@@ -237,7 +252,9 @@ class TorqueEstimatorExt:
     return results
 
   def _extend_msg(self, ltp, with_points):
-    """Called from get_msg. Populates speed-bin fields in cereal message."""
+    """Called from get_msg. Populates speed-bin fields in cereal message.
+    Skips if bins aren't initialized yet — prevents overwriting a good Params
+    cache with empty arrays before _ensure_speed_bins has restored it."""
     if not self.speed_binned or not hasattr(self, 'speed_bin_points'):
       return
     bin_results = self._estimate_params_speed_binned()

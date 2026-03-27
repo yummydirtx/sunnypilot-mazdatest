@@ -60,7 +60,6 @@ class TorqueEstimatorExt:
     self.torque_override_enabled = self._params.get_bool("TorqueParamsOverrideEnabled")
     self.use_speed_dep = self._params.get_bool("SpeedDependentTorqueToggle")
     self.speed_binned = False
-    self._speed_bin_resets = -1
     self.min_bucket_points = RELAXED_MIN_BUCKET_POINTS
     self.factor_sanity = 0.0
     self.friction_sanity = 0.0
@@ -148,14 +147,7 @@ class TorqueEstimatorExt:
 
     n_bins = len(self.speed_bin_bounds)
 
-    self.speed_bin_points = [
-      TorqueBuckets(x_bounds=STEER_BUCKET_BOUNDS,
-                    min_points=self.min_bucket_points,
-                    min_points_total=MIN_POINTS_PER_SPEED_BIN,
-                    points_per_bucket=POINTS_PER_SPEED_BUCKET,
-                    rowsize=3)
-      for _ in range(n_bins)
-    ]
+    self.speed_bin_points = [self._make_speed_bin_bucket(TorqueBuckets, STEER_BUCKET_BOUNDS) for _ in range(n_bins)]
 
     ref_lafs = cfg.get('laf_bp', [self.offline_latAccelFactor] * n_bins)
     ref_frictions = cfg.get('friction_bp', [self.offline_friction] * n_bins)
@@ -178,12 +170,20 @@ class TorqueEstimatorExt:
       for f in ref_frictions
     ]
 
+  def _make_speed_bin_bucket(self, TorqueBuckets, STEER_BUCKET_BOUNDS):
+    """Create a single speed-bin TorqueBuckets instance."""
+    return TorqueBuckets(x_bounds=STEER_BUCKET_BOUNDS,
+                         min_points=self.min_bucket_points,
+                         min_points_total=MIN_POINTS_PER_SPEED_BIN,
+                         points_per_bucket=POINTS_PER_SPEED_BUCKET,
+                         rowsize=3)
+
   def _ensure_speed_bins(self):
-    """Init speed bins if needed (after a reset or on first call)."""
-    if hasattr(self, 'speed_bin_points') and self._speed_bin_resets == self.resets:
+    """Init speed bins on first call only (also handles toggle-on after init).
+    Speed bins are independent of the global learner — a global NaN reset does
+    not affect them. Each bin resets independently if its own SVD produces NaN."""
+    if hasattr(self, 'speed_bin_points'):
       return
-    # If bins already exist from eager init but resets changed, re-init
-    self._speed_bin_resets = self.resets
     self._post_reset()
     try:
       from cereal import log
@@ -192,7 +192,7 @@ class TorqueEstimatorExt:
         with log.Event.from_bytes(cache) as evt:
           self._restore_ext_cache(evt.liveTorqueParameters)
     except Exception:
-      cloudlog.exception("speed-dep: failed to restore cache after reset")
+      cloudlog.exception("speed-dep: failed to restore cache on first init")
 
   def _on_torque_point(self, steer, lateral_acc, vego):
     """Called from handle_log. Routes quality-filtered points to speed bins."""
@@ -221,8 +221,10 @@ class TorqueEstimatorExt:
       cloudlog.info("restored speed-bin torque params from cache")
 
   def _estimate_params_speed_binned(self):
-    """Run independent SVD fit per speed bin."""
-    from openpilot.selfdrive.locationd.torqued import slope2rot, MAX_FILTER_DECAY
+    """Run independent SVD fit per speed bin. Following upstream pattern:
+    if a bin has enough data (is_valid) but produces NaN, reset that bin only."""
+    from openpilot.selfdrive.locationd.torqued import TorqueBuckets, STEER_BUCKET_BOUNDS, slope2rot, \
+      MIN_FILTER_DECAY, MAX_FILTER_DECAY
 
     results = []
     for i, bucket in enumerate(self.speed_bin_points):
@@ -247,6 +249,13 @@ class TorqueEstimatorExt:
             continue
         except np.linalg.LinAlgError:
           pass
+
+        # Fell through: NaN or SVD failure. Following upstream pattern,
+        # reset this bin only if it had enough data to be valid.
+        if bucket.is_valid():
+          cloudlog.warning(f"speed-dep: bin {i} produced NaN with valid data, resetting bin")
+          self.speed_bin_points[i] = self._make_speed_bin_bucket(TorqueBuckets, STEER_BUCKET_BOUNDS)
+          self.speed_bin_decays[i] = MIN_FILTER_DECAY
       results.append((i, False))
     return results
 

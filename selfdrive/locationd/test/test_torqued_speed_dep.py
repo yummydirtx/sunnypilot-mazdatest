@@ -118,7 +118,6 @@ class TestSpeedBinnedLearning:
       assert len(ltp.speedBinLatAccelFactors) == len(SPEED_BIN_BOUNDS)
       assert len(ltp.speedBinFrictions) == len(SPEED_BIN_BOUNDS)
       assert len(ltp.speedBinValid) == len(SPEED_BIN_BOUNDS)
-      assert len(ltp.speedBinCalPerc) == len(SPEED_BIN_BOUNDS)
 
   @patch(PATCH_EXT_PARAMS)
   @patch(PATCH_PARAMS)
@@ -176,7 +175,6 @@ class TestBackwardCompatibility:
     assert len(ltp.speedBinLatAccelFactors) == 0
     assert len(ltp.speedBinFrictions) == 0
     assert len(ltp.speedBinValid) == 0
-    assert len(ltp.speedBinCalPerc) == 0
 
   @patch(PATCH_EXT_PARAMS)
   @patch(PATCH_PARAMS)

@@ -2304,8 +2304,7 @@ struct LiveTorqueParametersData {
   speedBinLatAccelFactors @15 :List(Float32);
   speedBinFrictions @16 :List(Float32);
   speedBinValid @17 :List(Bool);
-  speedBinCalPerc @18 :List(Float32);
-  speedBinPoints @19 :List(List(List(Float32)));  # per-bin point buckets for cache
+  speedBinPoints @18 :List(List(List(Float32)));  # per-bin point buckets for cache
 }
 
 struct LiveDelayData {

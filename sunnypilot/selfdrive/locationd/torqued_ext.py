@@ -265,11 +265,9 @@ class TorqueEstimatorExt:
     bin_results = self._estimate_params_speed_binned()
     n_bins = len(self.speed_bin_bounds)
 
-    lat_factors, frictions, valid_flags, cal_percs = [], [], [], []
+    lat_factors, frictions, valid_flags = [], [], []
     bin_points = [] if with_points else None
     for i in range(n_bins):
-      cal_perc = float(self.speed_bin_points[i].get_valid_percent())
-      cal_percs.append(cal_perc)
       lat_factors.append(float(self.speed_bin_filtered[i]['latAccelFactor'].x))
       frictions.append(float(self.speed_bin_filtered[i]['frictionCoefficient'].x))
       _, valid = bin_results[i]
@@ -281,6 +279,5 @@ class TorqueEstimatorExt:
     ltp.speedBinLatAccelFactors = lat_factors
     ltp.speedBinFrictions = frictions
     ltp.speedBinValid = valid_flags
-    ltp.speedBinCalPerc = cal_percs
     if with_points:
       ltp.speedBinPoints = bin_points

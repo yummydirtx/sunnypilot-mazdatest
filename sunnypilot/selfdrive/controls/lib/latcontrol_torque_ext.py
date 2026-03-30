@@ -60,7 +60,8 @@ class LatControlTorqueExt(NeuralNetworkLateralControl, LatControlTorqueExtOverri
     cfg = get_speed_dep_config().get(self.CP.carFingerprint, {})
     seed_lafs = cfg.get('laf_bp')
     seed_frictions = cfg.get('friction_bp')
-    if seed_lafs and len(seed_lafs) == len(speed_bp):
+    if (seed_lafs and seed_frictions and
+        len(seed_lafs) == len(speed_bp) and len(seed_frictions) == len(speed_bp)):
       fallback_factors = seed_lafs
       fallback_frictions = seed_frictions
     else:

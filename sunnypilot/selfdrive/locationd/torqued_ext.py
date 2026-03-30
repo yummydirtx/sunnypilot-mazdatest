@@ -17,8 +17,6 @@ from openpilot.sunnypilot import PARAMS_UPDATE_PERIOD
 
 RELAXED_MIN_BUCKET_POINTS = np.array([1, 200, 300, 500, 500, 300, 200, 1])
 
-ALLOWED_CARS = ['toyota', 'hyundai', 'rivian', 'honda']
-
 # Default speed bins — used when car has no speed_dependent.toml entry.
 # Skip <5 m/s where lat_accel = v*yaw_rate is noisy.
 DEFAULT_SPEED_BIN_BOUNDS = [(5, 8), (8, 12), (12, 18), (18, 24), (24, 29), (29, 35), (35, 40)]
@@ -55,7 +53,6 @@ class TorqueEstimatorExt:
     self.frame = -1
 
     self.enforce_torque_control_toggle = self._params.get_bool("EnforceTorqueControl")  # only during init
-    self.use_params = self.CP.brand in ALLOWED_CARS and self.CP.lateralTuning.which() == 'torque'
     self.use_live_torque_params = self._params.get_bool("LiveTorqueParamsToggle")
     self.torque_override_enabled = self._params.get_bool("TorqueParamsOverrideEnabled")
     self.use_speed_dep = self._params.get_bool("SpeedDependentTorqueToggle")
@@ -100,8 +97,6 @@ class TorqueEstimatorExt:
     if self.frame % int(PARAMS_UPDATE_PERIOD / DT_MDL) == 0:
       self.use_live_torque_params = self._params.get_bool("LiveTorqueParamsToggle")
       self.torque_override_enabled = self._params.get_bool("TorqueParamsOverrideEnabled")
-      self.use_speed_dep = self._params.get_bool("SpeedDependentTorqueToggle")
-      self.speed_binned = self.CP.lateralTuning.which() == 'torque' and self.use_speed_dep
 
   def update_use_params(self):
     self._update_params()
@@ -128,7 +123,7 @@ class TorqueEstimatorExt:
     return bounds
 
   def _post_reset(self):
-    """Called from TorqueEstimator.reset(). Initializes per-speed-bin buckets."""
+    """Initializes per-speed-bin buckets. Called from initialize_custom_params and _ensure_speed_bins."""
     if not self.speed_binned:
       return
 
@@ -208,6 +203,7 @@ class TorqueEstimatorExt:
     """Restores per-bin filter values and points from cache."""
     if not self.speed_binned:
       return
+    from openpilot.selfdrive.locationd.torqued import MIN_FILTER_DECAY
     n_bins = len(self.speed_bin_bounds)
     if (len(cache_ltp.speedBinLatAccelFactors) == n_bins and
         len(cache_ltp.speedBinFrictions) == n_bins):
@@ -217,7 +213,7 @@ class TorqueEstimatorExt:
       if len(cache_ltp.speedBinPoints) == n_bins:
         for i in range(n_bins):
           self.speed_bin_points[i].load_points(cache_ltp.speedBinPoints[i])
-      self.speed_bin_decays = [self.decay] * n_bins
+      self.speed_bin_decays = [getattr(self, 'decay', MIN_FILTER_DECAY)] * n_bins
       cloudlog.info("restored speed-bin torque params from cache")
 
   def _estimate_params_speed_binned(self):

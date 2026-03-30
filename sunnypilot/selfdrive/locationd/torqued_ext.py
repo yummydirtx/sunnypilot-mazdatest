@@ -18,33 +18,29 @@ from openpilot.sunnypilot import PARAMS_UPDATE_PERIOD
 RELAXED_MIN_BUCKET_POINTS = np.array([1, 200, 300, 500, 500, 300, 200, 1])
 
 # Default speed bins — used when car has no speed_dependent.toml entry.
-# Skip <5 m/s where lat_accel = v*yaw_rate is noisy.
 DEFAULT_SPEED_BIN_BOUNDS = [(5, 8), (8, 12), (12, 18), (18, 24), (24, 29), (29, 35), (35, 40)]
 DEFAULT_SPEED_BIN_CENTERS = [6.5, 10.0, 15.0, 21.0, 26.5, 32.0, 37.5]
 MIN_POINTS_PER_SPEED_BIN = 600
 FIT_POINTS_PER_SPEED_BIN = 400
 POINTS_PER_SPEED_BUCKET = 500
-SPEED_BIN_MIN_CAL_PERC = 80  # min cal% before applying learned values to closure
-FRICTION_FACTOR = 1.5  # same as upstream
 
 
 class TorqueEstimatorExt:
   """SP extension mixed into TorqueEstimator via multiple inheritance.
 
   Adds per-speed-bin learning on top of upstream's single-value torqued.
-  Gated by SpeedDependentTorqueToggle (polled dynamically, no restart needed).
+  Gated by SpeedDependentTorqueToggle (offroad-only).
 
   Data flow:
     1. torqued calls _on_torque_point() for each quality-filtered sample → routed to speed bin
     2. _estimate_params_speed_binned() runs independent SVD fit per bin (same algo as upstream)
-    3. _extend_msg() writes per-bin latAccelFactor/friction/valid/cal% to cereal message
-    4. controlsd_ext picks up the message and calls latcontrol_torque_ext.update_speed_dep_torque()
+    3. Per-bin validity uses upstream's is_valid() — requires sufficient steer-range coverage
+    4. _extend_msg() writes per-bin values to cereal; invalid bins fall back to seed/global values
     5. The lateral controller interpolates latAccelFactor and friction by speed each frame
 
   Bin configuration:
     - Cars with a speed_dependent.toml entry use per-car bin centers (and derived bounds)
     - Cars without an entry use DEFAULT_SPEED_BIN_BOUNDS and seed all bins with global offline values
-    - Bin ranges are derived from centers via midpoint calculation (see _centers_to_bounds)
   """
 
   def __init__(self, CP: car.CarParams):
@@ -55,8 +51,8 @@ class TorqueEstimatorExt:
     self.enforce_torque_control_toggle = self._params.get_bool("EnforceTorqueControl")  # only during init
     self.use_live_torque_params = self._params.get_bool("LiveTorqueParamsToggle")
     self.torque_override_enabled = self._params.get_bool("TorqueParamsOverrideEnabled")
-    self.use_speed_dep = self._params.get_bool("SpeedDependentTorqueToggle")
-    self.speed_binned = False
+    self.speed_binned = (self.CP.lateralTuning.which() == 'torque'
+                         and self._params.get_bool("SpeedDependentTorqueToggle"))
     self.min_bucket_points = RELAXED_MIN_BUCKET_POINTS
     self.factor_sanity = 0.0
     self.friction_sanity = 0.0
@@ -75,9 +71,6 @@ class TorqueEstimatorExt:
       if self._params.get_bool("CustomTorqueParams"):
         self.offline_latAccelFactor = float(self._params.get("TorqueParamsOverrideLatAccelFactor", return_default=True))
         self.offline_friction = float(self._params.get("TorqueParamsOverrideFriction", return_default=True))
-
-    # Speed-binned learning: toggle-gated, works for any torque car
-    self.speed_binned = self.CP.lateralTuning.which() == 'torque' and self.use_speed_dep
 
     # Eagerly init speed bins and restore cache so bins exist before the
     # first cache write (frame 0). Without this, the first cache write emits
@@ -132,7 +125,6 @@ class TorqueEstimatorExt:
 
     cfg = get_speed_dep_config().get(self.CP.carFingerprint, {})
 
-    # Per-car bin ranges from config, or defaults
     if 'speed_bp' in cfg:
       self.speed_bin_centers = list(cfg['speed_bp'])
       self.speed_bin_bounds = self._centers_to_bounds(self.speed_bin_centers)
@@ -143,6 +135,8 @@ class TorqueEstimatorExt:
     n_bins = len(self.speed_bin_bounds)
 
     self.speed_bin_points = [self._make_speed_bin_bucket(TorqueBuckets, STEER_BUCKET_BOUNDS) for _ in range(n_bins)]
+    self._speed_bin_last_len = [0] * n_bins
+    self._speed_bin_last_valid = [False] * n_bins
 
     ref_lafs = cfg.get('laf_bp', [self.offline_latAccelFactor] * n_bins)
     ref_frictions = cfg.get('friction_bp', [self.offline_friction] * n_bins)
@@ -217,57 +211,76 @@ class TorqueEstimatorExt:
       cloudlog.info("restored speed-bin torque params from cache")
 
   def _estimate_params_speed_binned(self):
-    """Run independent SVD fit per speed bin. Following upstream pattern:
-    if a bin has enough data (is_valid) but produces NaN, reset that bin only."""
-    from openpilot.selfdrive.locationd.torqued import TorqueBuckets, STEER_BUCKET_BOUNDS, slope2rot, \
-      MIN_FILTER_DECAY, MAX_FILTER_DECAY
+    """Run independent SVD fit per speed bin. Resets bin on NaN with valid data."""
+    from openpilot.selfdrive.locationd.torqued import TorqueBuckets, STEER_BUCKET_BOUNDS, \
+      FRICTION_FACTOR, slope2rot, MIN_FILTER_DECAY, MAX_FILTER_DECAY
 
     results = []
     for i, bucket in enumerate(self.speed_bin_points):
-      if bucket.is_calculable():
-        points = bucket.get_points(FIT_POINTS_PER_SPEED_BIN)
-        try:
-          _, _, v = np.linalg.svd(points, full_matrices=False)
-          slope, offset = -v.T[0:2, 2] / v.T[2, 2]
-          _, spread = np.matmul(points[:, [0, 2]], slope2rot(slope)).T
-          friction_coeff = np.std(spread) * FRICTION_FACTOR
-          if not any(np.isnan(val) for val in [slope, friction_coeff]):
-            factor_lo, factor_hi = self.speed_bin_lat_accel_factor_bounds[i]
-            fric_lo, fric_hi = self.speed_bin_friction_bounds[i]
-            clipped_factor = np.clip(slope, factor_lo, factor_hi)
-            fric = np.clip(friction_coeff, fric_lo, fric_hi)
-            self.speed_bin_decays[i] = min(self.speed_bin_decays[i] + DT_MDL, MAX_FILTER_DECAY)
-            self.speed_bin_filtered[i]['latAccelFactor'].update(clipped_factor)
-            self.speed_bin_filtered[i]['latAccelFactor'].update_alpha(self.speed_bin_decays[i])
-            self.speed_bin_filtered[i]['frictionCoefficient'].update(fric)
-            self.speed_bin_filtered[i]['frictionCoefficient'].update_alpha(self.speed_bin_decays[i])
-            results.append((i, True))
-            continue
-        except np.linalg.LinAlgError:
-          pass
+      if not bucket.is_calculable():
+        results.append((i, False))
+        continue
 
-        # Fell through: NaN or SVD failure. Following upstream pattern,
-        # reset this bin only if it had enough data to be valid.
-        if bucket.is_valid():
-          cloudlog.warning(f"speed-dep: bin {i} produced NaN with valid data, resetting bin")
-          self.speed_bin_points[i] = self._make_speed_bin_bucket(TorqueBuckets, STEER_BUCKET_BOUNDS)
-          self.speed_bin_decays[i] = MIN_FILTER_DECAY
+      # Skip bins with no new data since last fit
+      cur_len = len(bucket)
+      if cur_len == self._speed_bin_last_len[i]:
+        results.append((i, self._speed_bin_last_valid[i]))
+        continue
+
+      points = bucket.get_points(FIT_POINTS_PER_SPEED_BIN)
+      try:
+        _, _, v = np.linalg.svd(points, full_matrices=False)
+        slope, offset = -v.T[0:2, 2] / v.T[2, 2]
+        _, spread = np.matmul(points[:, [0, 2]], slope2rot(slope)).T
+        friction_coeff = np.std(spread) * FRICTION_FACTOR
+        if not any(np.isnan(val) for val in [slope, friction_coeff]):
+          factor_lo, factor_hi = self.speed_bin_lat_accel_factor_bounds[i]
+          fric_lo, fric_hi = self.speed_bin_friction_bounds[i]
+          self.speed_bin_decays[i] = min(self.speed_bin_decays[i] + DT_MDL, MAX_FILTER_DECAY)
+          self.speed_bin_filtered[i]['latAccelFactor'].update(np.clip(slope, factor_lo, factor_hi))
+          self.speed_bin_filtered[i]['latAccelFactor'].update_alpha(self.speed_bin_decays[i])
+          self.speed_bin_filtered[i]['frictionCoefficient'].update(np.clip(friction_coeff, fric_lo, fric_hi))
+          self.speed_bin_filtered[i]['frictionCoefficient'].update_alpha(self.speed_bin_decays[i])
+          self._speed_bin_last_len[i] = cur_len
+          self._speed_bin_last_valid[i] = bucket.is_valid()
+          results.append((i, self._speed_bin_last_valid[i]))
+          continue
+      except np.linalg.LinAlgError:
+        pass
+
+      if bucket.is_valid():
+        cloudlog.warning(f"speed-dep: bin {i} produced NaN with valid data, resetting bin")
+        self.speed_bin_points[i] = self._make_speed_bin_bucket(TorqueBuckets, STEER_BUCKET_BOUNDS)
+        self.speed_bin_decays[i] = MIN_FILTER_DECAY
+        self._speed_bin_last_len[i] = 0
+      self._speed_bin_last_valid[i] = False
       results.append((i, False))
     return results
 
   def _extend_msg(self, ltp, with_points):
-    """Called from get_msg. Populates speed-bin fields in cereal message.
-    Skips if bins aren't initialized yet — prevents overwriting a good Params
-    cache with empty arrays before _ensure_speed_bins has restored it."""
+    """Called from get_msg. Skips if bins aren't initialized yet to prevent
+    overwriting a good Params cache with empty arrays."""
     if not self.speed_binned or not hasattr(self, 'speed_bin_points'):
       return
     bin_results = self._estimate_params_speed_binned()
     n_bins = len(self.speed_bin_bounds)
-    bin_cal_percs = [float(self.speed_bin_points[i].get_valid_percent()) for i in range(n_bins)]
+
+    lat_factors, frictions, valid_flags, cal_percs = [], [], [], []
+    bin_points = [] if with_points else None
+    for i in range(n_bins):
+      cal_perc = float(self.speed_bin_points[i].get_valid_percent())
+      cal_percs.append(cal_perc)
+      lat_factors.append(float(self.speed_bin_filtered[i]['latAccelFactor'].x))
+      frictions.append(float(self.speed_bin_filtered[i]['frictionCoefficient'].x))
+      _, valid = bin_results[i]
+      valid_flags.append(valid)
+      if with_points:
+        bin_points.append(self.speed_bin_points[i].get_points(FIT_POINTS_PER_SPEED_BIN)[:, [0, 2]].tolist())
+
     ltp.speedBinCenters = self.speed_bin_centers
-    ltp.speedBinLatAccelFactors = [float(self.speed_bin_filtered[i]['latAccelFactor'].x) for i in range(n_bins)]
-    ltp.speedBinFrictions = [float(self.speed_bin_filtered[i]['frictionCoefficient'].x) for i in range(n_bins)]
-    ltp.speedBinValid = [valid and bin_cal_percs[i] >= SPEED_BIN_MIN_CAL_PERC for i, (_, valid) in enumerate(bin_results)]
-    ltp.speedBinCalPerc = bin_cal_percs
+    ltp.speedBinLatAccelFactors = lat_factors
+    ltp.speedBinFrictions = frictions
+    ltp.speedBinValid = valid_flags
+    ltp.speedBinCalPerc = cal_percs
     if with_points:
-      ltp.speedBinPoints = [bucket.get_points(FIT_POINTS_PER_SPEED_BIN)[:, [0, 2]].tolist() for bucket in self.speed_bin_points]
+      ltp.speedBinPoints = bin_points

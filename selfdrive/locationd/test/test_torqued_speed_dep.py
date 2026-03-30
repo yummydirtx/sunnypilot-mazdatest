@@ -393,6 +393,7 @@ class TestNaNHandling:
     mock_bucket.is_valid.return_value = False
     mock_bucket.get_points.return_value = np.zeros((10, 3))
     est.speed_bin_points[target_bin] = mock_bucket
+    est._speed_bin_last_len[target_bin] = -1  # force recalculation
 
     with patch('numpy.linalg.svd', side_effect=np.linalg.LinAlgError):
       results = est._estimate_params_speed_binned()
@@ -415,6 +416,7 @@ class TestNaNHandling:
     mock_bucket.is_valid.return_value = True  # enough data → triggers reset
     mock_bucket.get_points.return_value = np.zeros((10, 3))
     est.speed_bin_points[target_bin] = mock_bucket
+    est._speed_bin_last_len[target_bin] = -1  # force recalculation
 
     with patch('numpy.linalg.svd', side_effect=np.linalg.LinAlgError):
       est._estimate_params_speed_binned()
@@ -438,6 +440,7 @@ class TestNaNHandling:
     mock_bucket.is_valid.return_value = False  # not enough data → no reset
     mock_bucket.get_points.return_value = np.zeros((10, 3))
     est.speed_bin_points[target_bin] = mock_bucket
+    est._speed_bin_last_len[target_bin] = -1  # force recalculation
 
     with patch('numpy.linalg.svd', side_effect=np.linalg.LinAlgError):
       est._estimate_params_speed_binned()

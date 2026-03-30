@@ -358,6 +358,7 @@ class TestUpdateSpeedDepTorqueFallback:
     mock_self._speed_dep_speed_bp = []
     mock_self._speed_dep_lat_accel_factor_bp = []
     mock_self._speed_dep_friction_bp = []
+    mock_self._speed_dep_car_cfg = None
     return mock_self
 
   @patch(PATCH_GET_SPEED_DEP_CONFIG)

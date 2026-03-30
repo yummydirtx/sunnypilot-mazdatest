@@ -54,10 +54,10 @@ class LatControlTorqueExt(NeuralNetworkLateralControl, LatControlTorqueExtOverri
     frictions = list(tp.speedBinFrictions)
     valid_bp = list(tp.speedBinValid)
 
-    # Prefer TOML seeds as fallback for invalid bins; use global filtered only
-    # when no per-car config exists.
-    from opendbc.sunnypilot.car.interfaces import get_speed_dep_config
-    cfg = get_speed_dep_config().get(self.CP.carFingerprint, {})
+    if self._speed_dep_car_cfg is None:
+      from opendbc.sunnypilot.car.interfaces import get_speed_dep_config
+      self._speed_dep_car_cfg = get_speed_dep_config().get(self.CP.carFingerprint, {})
+    cfg = self._speed_dep_car_cfg
     seed_lafs = cfg.get('laf_bp')
     seed_frictions = cfg.get('friction_bp')
     if (seed_lafs and seed_frictions and

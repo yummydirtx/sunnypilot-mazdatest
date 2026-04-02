@@ -156,8 +156,16 @@ class ModularAssistiveDrivingSystem:
 
     for be in CS.buttonEvents:
       if be.type == ButtonType.cancel:
+        if self.CP.brand == "mazda" and self.CP.openpilotLongitudinalControl and self.enabled and be.pressed:
+          self.events_sp.add(EventNameSP.lkasDisable)
         if not self.selfdrive.enabled and self.selfdrive.enabled_prev:
           self.events_sp.add(EventNameSP.manualLongitudinalRequired)
+      if be.type == ButtonType.mainCruise and be.pressed and self.main_enabled_toggle:
+        if self.CP.brand == "mazda" and self.CP.openpilotLongitudinalControl:
+          if self.enabled:
+            self.events_sp.add(EventNameSP.lkasDisable)
+          else:
+            self.events_sp.add(EventNameSP.lkasEnable)
       if be.type == ButtonType.lkas and be.pressed and (CS.cruiseState.available or self.allow_always):
         if self.enabled:
           if self.selfdrive.enabled:
